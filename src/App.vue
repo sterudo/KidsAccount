@@ -6,7 +6,13 @@
     </div>
   </div>
 
-    <h1 class="app-title">Kids Account Manager v1.0</h1>
+    <h1 class="app-title"> <button style="float:left;"
+          v-if="currentScreen === 'ledger'" 
+          @click="currentScreen = 'dashboard'" 
+          class="btn btn-back-nav"
+        >
+          ⬅ Back
+        </button> Kids Accounts  v1.1</h1>
   <div id="app">
    <div v-if="isDeviceUnauthorized" class="card auth-warning-card">
     <h4>🔒 Authorizing this device ... please wait</h4>
@@ -20,26 +26,38 @@
     <header class="app-header">
     
       <div class="nav-and-back-group">
-        <!-- Back button dynamically placed to the left of Dashboard when on ledger screen -->
-        <button 
-          v-if="currentScreen === 'ledger'" 
-          @click="currentScreen = 'dashboard'" 
-          class="btn btn-back-nav"
-        >
-          ⬅ Back
-        </button>
-        
+        <!-- Back button dynamically placed to the left of Dashboard when on ledger screen                
         <button @click="currentScreen = 'dashboard'" class="btn" :class="currentScreen === 'dashboard' ? 'btn-primary' : 'btn-secondary'">Dashboard</button>
+        -->
         <button @click="currentScreen = 'addChildSettings'" class="dbb btn" :class="currentScreen === 'addChildSettings' ? 'btn-primary' : 'btn-secondary'">+ Add Child</button>
         <button @click="currentScreen = 'addUserSettings'" class="dbb btn" :class="currentScreen === 'addUserSettings' ? 'btn-primary' : 'btn-secondary'">+ Add User</button>
       </div>
       
-      <div class="user-selector">
-        <label for="global-user">User:</label>
-        <select id="global-user" v-model="currentUser">
-          <option v-for="user in users" :key="user" :value="user">{{ user }}</option>
-        </select>
+      <div class="user-selector-and-refresh-group">
+        <button type="button" @click="fetchSyncDatabase" class="btn btn-refresh-sync" title="Sync Cloud Data" :disabled="isLoading">
+          {{ isLoading ? '⏳' : '🔄 Refresh' }}
+        </button>
+
+        <div class="user-selector">
+          <label for="global-user">User:</label>
+          <select id="global-user" v-model="currentUser" @change="saveUserPreference">
+            <option v-for="user in users" :key="user" :value="user">{{ user }}</option>
+          </select>
+        </div>
       </div>
+       <div  v-if="currentScreen === 'ledger' && selectedChild"  class="ledger-header">
+          <div class="child-summary">
+                <div style="padding:8px;border-top: 2px solid black; display: grid;
+  grid-template-columns: 1fr min-content min-content min-content;
+  gap: 8px;  border-bottom: 2px solid black;padding-bottom: 5px !important;  " class="balance-badge" :class="calculateBalance(selectedChild.id) >= 0 ? 'pos-dark-dark' : 'neg-dark-dark'">
+                  <span class="childsName"  :class="(selectedChild.name == 'Eve') ? 'girl': 'boy-dark'">{{ selectedChild.name }}</span>           
+                  <span class="balancelabel">Balance</span>
+                  <span class="currency" style="font-size:32px;  "> £</span>              
+                     <strong style="font-size:32px;text-shadow: white -1px -1px 1px, black 1px 1px 2px;">{{ calculateBalance(selectedChild.id).toFixed(2) }}</strong>
+                </div>    
+          </div>  
+        </div>
+
     </header>
 
     <main class="app-container">
@@ -130,17 +148,7 @@
 
       <!-- VIEW 4: LEDGER / STATEMENT DETAILED VIEW -->
       <section v-if="currentScreen === 'ledger' && selectedChild" class="screen">
-        <div class="ledger-header">
-          <div class="child-summary">
-                <div style="padding:8px;border-top: 2px solid black;  border-bottom: 2px solid black;  " class="balance-badge" :class="calculateBalance(selectedChild.id) >= 0 ? 'pos-dark-dark' : 'neg-dark-dark'">
-                  <span class="childsName"  :class="(selectedChild.name == 'Eve') ? 'girl': 'boy'">{{ selectedChild.name }}'s Statement</span>           
-                  <span class="balancelabel">Balance</span>
-                  <span class="currency" style="font-size:32px; text-shadow: -1px -1px 1px white, 1px 1px 2px black; "> £</span>              
-                     <strong style="font-size:32px;">{{ calculateBalance(selectedChild.id).toFixed(2) }}</strong>
-                </div>    
-          </div>  
-        </div>
-
+       
         <!-- Transaction Input Form -->
         <div class="card form-card">
           <h3>Log New Transaction</h3>
@@ -152,7 +160,7 @@
 
                <div class="form-group">
               <label>Type</label>
-              <select v-model="txForm.type">
+              <select v-model="txForm.type" style="max-width:150px;">
                 <option value="withdrawal">Withdrawal (-)</option>
                 <option value="deposit">Deposit (+)</option>
               </select>
@@ -202,7 +210,8 @@
               <label>Amount (£)</label>
               <input v-model.number="txForm.amount" style="font-size:32px;height:55px;box-sizing: border-box;" type="number" step="0.01" min="0.01" required />
             </div>
-            <button type="submit " class="btn btn-primary log-submit-btn  " style="font-size:32px;height:55px;box-sizing: border-box;">Log</button>
+            <button type="submit " class="btn btn-primary log-submit-btn  " :class="{ 'Deposit': txForm.type === 'deposit', 'Withdraw': txForm.type === 'withdrawal' }"
+            style="font-size:24px;height:55px;box-sizing: border-box;display: flex !important;  place-content: center;  text-shadow: 1px 1px 3px black;" >{{ txForm.type === 'deposit' ? 'Deposit'  : 'Withdraw' }}</button>
           </form>
         </div>
 
@@ -371,12 +380,13 @@ const filterEndDate = ref('');
 
 // --- DATA ACCESS LAYER ---
 // Update your fetchSyncDatabase function to store it
+const lastSyncTime = ref(0); 
+
 async function fetchSyncDatabase() {
   isLoading.value = true;
   try {
-    const cacheBusterUrl = `${SHEET_API_URL}?_cb=${Date.now()}`;
-    const res = await fetch(cacheBusterUrl);
-    const data = await res.json();
+    const response = await fetch(`${SHEET_API_URL}?action=getInitialData`);
+    const data = await response.json();
     
     // 1. Normalize Children Data to prevent NaN
     children.value = (data.children || []).map(child => {
@@ -415,8 +425,10 @@ async function fetchSyncDatabase() {
     authorizedDevices.value = (data.authorizedDevices || []).map(d => String(d).toLowerCase().trim());
     
     console.log("Normalized Database Clean Sync:", children.value, transactions.value);
+    lastSyncTime.value = Date.now();
+
   } catch (err) {
-    console.error("Database initialization fault:", err);
+    console.error("Failed to sync database:", err);
   } finally {
     isLoading.value = false;
   }
@@ -449,15 +461,55 @@ const isDeviceUnauthorized = computed(() => {
 
 const deviceFingerprint = ref('fp-unknown');
 
+// --- 1. USER PERSISTENCE LIFECYCLES ---
+function saveUserPreference() {
+  localStorage.setItem('pocket_money_active_user', currentUser.value);
+}
+
 onMounted(() => {
+  // Device fingerprint verification logic
   let fp = localStorage.getItem('pocket_money_fingerprint');
   if (!fp) {
     fp = `fp-${Math.random().toString(36).substring(2, 7)}`;
     localStorage.setItem('pocket_money_fingerprint', fp);
   }
   deviceFingerprint.value = fp;
-  console.log("Your Device Authorization Fingerprint is:", fp); // Look here in your console to copy it!
+  console.log("Your Device Authorization Fingerprint is:", fp);
+  
+  // 🌟 ENHANCEMENT 1: Recall saved user preference from localstorage
+  const savedUser = localStorage.getItem('pocket_money_active_user');
+  if (savedUser && users.value.includes(savedUser)) {
+    currentUser.value = savedUser;
+  } else {
+    currentUser.value = 'Dad'; // Default fallback
+  }
+
+  // Initial cloud synchronization
   fetchSyncDatabase();
+// Helper function to check if 1 minute (60,000ms) has passed since the last sync
+  function triggerThrottledRefresh() {
+    const oneMinute = 60 * 1000;
+    const timeSinceLastSync = Date.now() - lastSyncTime.value;
+
+    if (timeSinceLastSync >= oneMinute) {
+      console.log(`Throttled sync allowed: ${Math.round(timeSinceLastSync / 1000)}s since last update.`);
+      fetchSyncDatabase();
+    } else {
+      console.log(`Throttled sync blocked: Only ${Math.round(timeSinceLastSync / 1000)}s ago. Must wait 60s.`);
+    }
+  }
+  // 🌟 ENHANCEMENT 2 & 3: Automatic updates when app is opened or brought to foreground
+  // Captures when a user clicks the desktop icon or returns to the browser tab/app instance
+  // 🌟 ENHANCEMENT: Automated updates only when throttle threshold passes
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      triggerThrottledRefresh();
+    }
+  });
+
+  window.addEventListener('focus', () => {
+    triggerThrottledRefresh();
+  });
 });
 
 const selectedChild = computed(() => children.value.find(c => c.id === selectedChildId.value || String(c.id) === String(selectedChildId.value)));
@@ -846,6 +898,7 @@ h1 {
   position: sticky;
   top: 0px;
   z-index: 1000;
+  margin-bottom: -7px;
 }
 
 h2 {
@@ -872,12 +925,13 @@ label {
 
 input, select {
   font-family: arial, sans-serif;
-  padding: 6px;
+  padding: 6px !important;
 }
 
 /* Screen-Blocking Wait Scrim */
 .wait-scrim-overlay {
   position: fixed;
+  cursor: wait;
   top: 0;
   left: 0;
   width: 100vw;
@@ -902,6 +956,7 @@ input, select {
   flex-direction: column;
   align-items: center;
   gap: 16px;
+  cursor: wait;
 }
 
 .scrim-spinner-box p {
@@ -933,6 +988,7 @@ input, select {
 }
 
 .childsName {
+  text-align: left;
 margin-right: 32px;
   color: var(--primary);
   font-size: 24px;
@@ -954,8 +1010,13 @@ margin-right: 32px;
   top: 60px;
   background: #17192d;
   z-index: 1000;
+  flex-wrap: wrap;
 }
 
+
+.ledger-header {
+  flex-basis: 100%;
+}
 
 .nav-and-back-group {
   display: flex;
@@ -965,9 +1026,10 @@ margin-right: 32px;
 
 .btn-back-nav {
   background: var(--secondary);
-  border: 2px solid #17202d !important;
+  border: 0px solid #17202d !important;
   color: var(--primary) !important;
   transition: all 0.2s ease;
+  padding: 4px !important;
 }
 .btn-back-nav:hover {
   background:var(--secondary);
@@ -1025,7 +1087,7 @@ margin-right: 32px;
   grid-template-columns: 1fr 1fr; }
 .form-group { display: flex; flex-direction: column; flex: 1; min-width: 140px; }
 .log-submit-btn { padding: 12px 24px; min-width: 100px; }
-input, select { padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 1rem; }
+input, select { padding: 6px !important; border: 1px solid var(--border-color); border-radius: 6px; font-size: 1rem; }
 
 /* ROBUST CSS GRID DIRECT REPLACEMENT FOR TRADITIONAL HTML TABLES */
 .desktop-ledger-view-wrapper {
@@ -1183,32 +1245,38 @@ div.hide-on-mobile { display: block !important; }
   color:#6bf8ff !important;
   position: static;
 }
+.boy-dark {
+  color:#008188 !important;
+  position: static;
+}
+
+button.Deposit {
+  background: var(--success-dark);
+
+}
+
+button.Withdraw {
+  background: var(--danger-dark) !important;
+ 
+}
 /* --- TWO-ROW-PER-TRANSACTION MOBILE LAYOUT RULES --- */
 @media (max-width: 600px) {
   .dbb {
     display: none;
   }
 
-  h1 {
-    margin: 0px;
-  padding: 10px;
+  h1 {    
+  padding: 4px;
   font-size: 28px;
   }
 
   h3 {
     margin-bottom: 4px;
-  text-align: left;
-  position: absolute; 
-    top: -8px;
-    left: 15px;
     font-size: 1em;
   }
+
   .card.form-card{
     position: relative;
-  }
-
-  .balancelabel {
-    display:none;
   }
 
   .balance-badge {
@@ -1248,7 +1316,7 @@ div.hide-on-mobile { display: block !important; }
   .inline-form { display: grid;
   gap: 8px;
   align-items: flex-end;
-  grid-template-columns:140px  1fr; }
+  grid-template-columns:150px  1fr; }
   .form-group { width: 100%; }
   .log-submit-btn { width: 100%; }
 
@@ -1300,5 +1368,57 @@ div.hide-on-mobile { display: block !important; }
 }
 .search-filter-grid,.filter-header-row  .btn-tiny, .where { display: none; }
 
+}
+
+/* Header alignment adjustments for user selector + refresh button layout combo */
+.user-selector-and-refresh-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-refresh-sync {
+  background: #1e293b;
+  border: 1px solid var(--border-color);
+  padding: 4px;
+  font-size: 1rem;
+  font-weight: normal;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.btn-refresh-sync:hover:not(:disabled) {
+  background: #334155;
+}
+
+.btn-refresh-sync:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Ensure mobile stacking rules do not distort header utilities button configurations */
+@media (max-width: 600px) {
+
+  .nav-and-back-group {
+    display:none;
+  }
+  .user-selector-and-refresh-group {
+    width: 100%;
+    justify-content: space-between;
+    padding-top: 4px;
+    border-top: 1px solid var(--border-color);
+  }
+  .user-selector {
+    width: auto;
+    flex: 1;
+    justify-content: flex-end;
+  }
+  .user-selector select {
+    width: 110px;
+  }
 }
 </style>
