@@ -1,9 +1,16 @@
 <template>
-    <h1 class="app-title">Kids Account Manager v0.1</h1>
+<div v-if="isLoading" class="wait-scrim-overlay">
+    <div class="scrim-spinner-box">
+      <div class="scrim-spinner"></div>
+      <p>Syncing Cloud Ledger...</p>
+    </div>
+  </div>
+
+    <h1 class="app-title">Kids Account Manager v1.0</h1>
   <div id="app">
    <div v-if="isDeviceUnauthorized" class="card auth-warning-card">
-    <h4>🔒 Setup Required: Unauthorized Device</h4>
-    <p>This phone cannot log entries or modify data yet. To activate administrator controls, add this fingerprint ID to your <code>authorized_devices</code> spreadsheet tab:</p>
+    <h4>🔒 Authorizing this device ... please wait</h4>
+    <p>If this message persists, please add this device's fingerprint ID to your <code>authorized_devices</code> spreadsheet tab:</p>
     <div class="fingerprint-badge">
       <code>{{ deviceFingerprint }}</code>
     </div>
@@ -99,7 +106,7 @@
             <div v-for="child in children" :key="child.id" class="child-row-layout">
               <div class="child-row-click-area" @click="navigateToLedger(child.id)">
                 <div class="child-row-info">
-                  <h3 :class="(child.name == 'Eve') ? 'girl': 'boy'">{{ child.name }}</h3>
+                  <h3 :class="(child.name == 'Eve') ? 'girl': 'boy'">{{ child.name }} </h3>
                   <span class="allowance-label">Allowance: {{ formatCurrency(child.weeklyAllowance) }}/wk</span>
                 </div>
                 <div class="child-row-balance" :class="calculateBalance(child.id) >= 0 ? 'pos-dark-dark' : 'neg-dark-dark'">
@@ -230,13 +237,22 @@
               <div class="text-left where">Where</div>
               <div class="text-right">Amount</div>
               <template v-if="showMetaFields">
-                <div>Recorded By</div>
-                <div>Fingerprint</div>
-                <div>Timestamp</div>
+                <div class="text-left">Recorded By</div>
+                <div class="text-left">Fingerprint</div>
+                <div class="text-left">Timestamp</div>
               </template>
             </div>
 
             <div class="desktop-grid-body">
+                 <div v-if="editingTxId" class="desktop-inline-edit-actions">
+                <span>⚠️ Editing the last entry. Review numbers before updating history.</span>
+                <div class="action-buttons-group">
+                  <button @click="saveInlineEdit(editingTxId)" class="btn-save-inline">Save Update</button>
+                  <button @click="cancelInlineEdit" class="btn-cancel-inline">Cancel</button>
+                  <button @click="handleDeleteLastTransaction(editingTxId)" class="btn-delete-row" style="padding:4px 10px; font-size:0.85rem;">Delete Entirely</button>
+                </div>
+              </div>
+           
               <!-- Inline transaction list -->
               <div 
                 v-for="tx in filteredTransactions" 
@@ -249,6 +265,8 @@
                 :style="showMetaFields ? 'grid-template-columns:100px 1fr 1fr 90px 130px 120px 120px' : 'grid-template-columns: 100px 1fr 1fr 90px'"
                 @click="handleRowClick(tx)"
               >
+               <!-- Pinned Save Action Bar for desktop rows editing state controls -->
+           
                 <!-- Row display logic / Form fields toggle during row selections -->
                 <template v-if="editingTxId !== tx.id">
                   <div class="text-left">{{ formatDate(tx.date) }}</div>
@@ -258,9 +276,9 @@
                     {{ tx.type === 'deposit' ? '+' : '-' }}{{ formatCurrency(tx.amount) }}
                   </div>
                   <template v-if="showMetaFields">
-                    <div class="meta-cell">{{ tx.recordedBy }}</div>
-                    <div class="meta-cell mono">{{ tx.deviceFingerprint }}</div>
-                    <div class="meta-cell mono">{{ tx.utcTimestamp }}</div>
+                    <div class="meta-cell text-left ">{{ tx.recordedBy }}</div>
+                    <div class="meta-cell mono text-left">{{ tx.deviceFingerprint }}</div>
+                    <div class="meta-cell mono text-left">{{ formatTimestamp(tx.utcTimestamp) }}</div>
                   </template>
                 </template>
 
@@ -279,17 +297,9 @@
                     <div class="meta-cell">-</div><div class="meta-cell">-</div><div class="meta-cell">-</div>
                   </template>
                 </template>
-              </div>
+             </div>
 
-              <!-- Pinned Save Action Bar for desktop rows editing state controls -->
-              <div v-if="editingTxId" class="desktop-inline-edit-actions">
-                <span>⚠️ Editing the last entry. Review numbers before updating history.</span>
-                <div class="action-buttons-group">
-                  <button @click="saveInlineEdit(editingTxId)" class="btn-save-inline">Save Update</button>
-                  <button @click="cancelInlineEdit" class="btn-cancel-inline">Cancel</button>
-                  <button @click="handleDeleteLastTransaction(editingTxId)" class="btn-delete-row" style="padding:4px 10px; font-size:0.85rem;">Delete Entirely</button>
-                </div>
-              </div>
+             
 
               <!-- Pin Starting Balance cleanly to the absolute bottom of the list -->
               <div 
@@ -381,7 +391,10 @@ async function fetchSyncDatabase() {
         where: String(tx.where || ''),
         type: String(tx.type || 'withdrawal'),
         amount: isNaN(parseFloat(amt)) ? 0 : parseFloat(amt),
-        recordedBy: String(tx.recordedby || tx.recordedBy || 'System')
+        recordedBy: String(tx.recordedby || tx.recordedBy || 'System'),
+        // 🌟 MATCHING THE HTML TARGET VARIABLES EXPLICITLY:
+        deviceFingerprint: String(tx.device || tx.devicefingerprint || '-'),
+        utcTimestamp: String(tx.timestamp || tx.utctimestamp || '-')
       };
     });
     
@@ -399,7 +412,21 @@ async function fetchSyncDatabase() {
 // Add a reactive array to store the authorized fingerprints coming from the server
 const authorizedDevices = ref([]);
 
-
+function formatTimestamp(tsStr) {
+  if (!tsStr || tsStr === '-') return '-';
+  // Formats '2026-06-02T19:45:00.000Z' to '02/06 19:45'
+  try {
+    const dateObj = new Date(tsStr);
+    if (isNaN(dateObj.getTime())) return tsStr; // Fallback if string is different
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const hours = String(dateObj.getHours()).padStart(2, '0');
+    const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+    return `${day}/${month} ${hours}:${minutes}`;
+  } catch (e) {
+    return tsStr;
+  }
+}
 
 // Check if this device fingerprint is missing from the authorized list
 const isDeviceUnauthorized = computed(() => {
@@ -532,13 +559,67 @@ function isLastTransaction(txId) {
 function handleRowClick(tx) {
   if (isLastTransaction(tx.id)) {
     if (editingTxId.value === tx.id) return;
+    
+    // 🌟 CLEANUP DATE TIMESTAMP: Strip any time segment so HTML5 <input type="date"> works perfectly
+    let cleanDate = String(tx.date || '').trim();
+    if (cleanDate.includes('T')) cleanDate = cleanDate.split('T')[0];
+    if (cleanDate.includes(' ')) cleanDate = cleanDate.split(' ')[0];
+    
     editingTxId.value = tx.id;
-    editForm.value = { ...tx };
+    
+    // Hydrate the form tracking state explicitly
+    editForm.value = { 
+      ...tx,
+      date: cleanDate,
+      childid: String(tx.childid || tx.childId || '').trim()
+    };
   } else {
     alert("🔒 Audit Control Lock: adjustments are limited exclusively to the absolute newest ledger event.");
   }
 }
 
+async function saveInlineEdit(txId) {
+  if (!editForm.value.what.trim()) {
+    alert("Description cannot be empty.");
+    return;
+  }
+
+  // 🌟 DEFENSIVE PAYLOAD: Ensure EVERY field is explicitly compiled and string-cast
+  const payload = {
+    action: "editTransaction",
+    fingerprint: deviceFingerprint.value, 
+    id: String(txId).trim(),
+    childId: String(editForm.value.childid || editForm.value.childId || selectedChildId.value).trim(),
+    date: editForm.value.date,
+    what: editForm.value.what.trim(),
+    where: editForm.value.where ? editForm.value.where.trim() : '-',
+    type: String(editForm.value.type).toLowerCase().trim(),
+    amount: Number(editForm.value.amount),
+    recordedBy: currentUser.value
+  };
+  
+  isLoading.value = true;
+  editingTxId.value = null;
+  
+  try {
+    const res = await fetch(SHEET_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" }, // Bypass CORS preflight issues smoothly
+      body: JSON.stringify(payload)
+    });
+    
+    const statusCheck = await res.json();
+    if (statusCheck.status === 'denied') {
+      alert(statusCheck.message);
+    }
+  } catch (err) {
+    console.error("Failed to update transaction:", err);
+    alert("Network Error: Could not save your modification to Google Sheets.");
+  } finally {
+    // Refresh to get accurate re-calculated totals
+    await fetchSyncDatabase();
+  }
+}
 // --- INJECT INTO CHILD CREATION ---
 async function handleCreateChild() {
   const newChild = {
@@ -576,7 +657,7 @@ async function handleCreateTransaction() {
     action: "createTransaction",
     fingerprint: deviceFingerprint.value, // Pass validation tag
     id: 'tx_' + Date.now(),
-    childid: String(selectedChildId.value), // 🌟 FIXED: Changed from childId to childid
+    childId: String(selectedChildId.value),
     date: txForm.value.date,
     what: txForm.value.what,
     where: txForm.value.where || '-',
@@ -600,49 +681,26 @@ async function handleCreateTransaction() {
   await fetchSyncDatabase();
 }
 
-async function saveInlineEdit(txId) {
-  const payload = {
-    action: "editTransaction",
-    fingerprint: deviceFingerprint.value, // Pass validation tag
-    id: txId,
-    date: editForm.value.date,
-    what: editForm.value.what,
-    where: editForm.value.where,
-    type: editForm.value.type,
-    amount: Number(editForm.value.amount),
-    recordedBy: currentUser.value
-  };
-  
-  isLoading.value = true;
-  editingTxId.value = null;
-  
-  const res = await fetch(SHEET_API_URL, {
-    method: "POST",
-    body: JSON.stringify(payload)
-  });
-  
-  const statusCheck = await res.json();
-  if (statusCheck.status === 'denied') alert(statusCheck.message);
-  
-  await fetchSyncDatabase();
-}
-
 async function handleDeleteLastTransaction(txId) {
-  if (confirm("Delete the last logged transaction?")) {
+  if (confirm("Delete the last logged transaction entirely from history?")) {
     isLoading.value = true;
     editingTxId.value = null;
     
-    const res = await fetch(SHEET_API_URL, {
-      method: "POST",
-      body: JSON.stringify({ 
-        action: "deleteTransaction", 
-        id: txId,
-        fingerprint: deviceFingerprint.value // Pass validation tag
-      })
-    });
-    
-    const statusCheck = await res.json();
-    if (statusCheck.status === 'denied') alert(statusCheck.message);
+    try {
+      const res = await fetch(SHEET_API_URL, {
+        method: "POST",
+        body: JSON.stringify({ 
+          action: "deleteTransaction", 
+          id: String(txId),                    // Maps to params.id in Apps Script
+          fingerprint: deviceFingerprint.value // Passes the safety gate check
+        })
+      });
+      
+      const statusCheck = await res.json();
+      if (statusCheck.status === 'denied') alert(statusCheck.message);
+    } catch (err) {
+      console.error("Failed to delete transaction:", err);
+    }
     
     await fetchSyncDatabase();
   }
@@ -795,6 +853,59 @@ input, select {
   padding: 6px;
 }
 
+/* Screen-Blocking Wait Scrim */
+.wait-scrim-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.75); /* Dims the dark mode app smoothly */
+  backdrop-filter: blur(4px);        /* Softly blurs background elements */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;                     /* Ensures it sits safely on top of fixed title blocks */
+  pointer-events: all;               /* Captures and blocks all accidental glass taps */
+}
+
+/* Centralized Status Dialog Box */
+.scrim-spinner-box {
+  background: var(--card-bg);
+  padding: 24px 40px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.scrim-spinner-box p {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-main);
+  font-size: 1.1rem;
+  letter-spacing: -0.01em;
+}
+
+/* CSS Rotation Animation Spinner */
+.scrim-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--secondary);
+  border-top-color: var(--primary); /* Vibrant electric sky-blue lead color */
+  border-radius: 50%;
+  animation: spinScrim 0.8s linear infinite;
+}
+
+@keyframes spinScrim {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .currency {
   font-weight: normal !important;
 }
@@ -850,11 +961,15 @@ margin-right: 32px;
   margin-bottom: 20px;
 }
 
+/*
+
 .loading-overlay-indicator {
   background:#373210; 
   color:white;
   padding:8px; font-weight:bold; text-align:center; border-radius:6px; margin-bottom:12px;
 }
+
+*/
 
 /* SINGLE CARDS ROW PER CHILD */
 .dashboard-rows-container { display: flex; flex-direction: column; gap: 12px; }
@@ -957,8 +1072,8 @@ input, select { padding: 10px; border: 1px solid var(--border-color); border-rad
 
 .meta-cell { font-size: 0.8rem; color: #64748b; word-break: break-all; }
 .mono { font-family: monospace; }
-.text-right { text-align: right; }
-.text-left { text-align: left; }
+.text-right { text-align: right;;padding-right: 4px }
+.text-left { text-align: left;padding-left: 4px; }
 
 .pos-dark { color: var(--success-dark); background-color: #d1e7dd; font-weight: bold; }
 .neg { color: var(--danger-dark); background-color: #f8d7da; font-weight: bold; }
@@ -1039,10 +1154,12 @@ div.hide-on-mobile { display: block !important; }
 
 .girl {
   color: #ff4ca5 !important;
+  position: static;
 }
 
 .boy {
-  color:#6bf8ff !important
+  color:#6bf8ff !important;
+  position: static;
 }
 /* --- TWO-ROW-PER-TRANSACTION MOBILE LAYOUT RULES --- */
 @media (max-width: 600px) {
@@ -1059,12 +1176,28 @@ div.hide-on-mobile { display: block !important; }
   h3 {
     margin-bottom: 4px;
   text-align: left;
-  font-size: 1.1em;
+  position: absolute; 
+    top: -8px;
+    left: 15px;
+    font-size: 1em;
+  }
+  .card.form-card{
+    position: relative;
   }
 
   .balancelabel {
     display:none;
   }
+
+  .balance-badge {
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+  margin-bottom: 2px;
+}
+
+.filter-header-row {
+  position: relative;
+}
 
   .hide-on-mobile { display: none !important; }
   .show-only-on-mobile { display: flex !important; }
@@ -1080,9 +1213,9 @@ div.hide-on-mobile { display: block !important; }
     width: 100%; 
     box-sizing: border-box; 
     justify-content: space-between; 
-    padding: 10px; 
-    border: 1px solid var(--border-color); 
-    border-radius: 6px; 
+    padding-bottom: 2px;
+    border: 0px solid var(--border-color); 
+    border-radius: 0px; 
   }
   .user-selector select { width: 65%;padding: 4px; }
 
@@ -1093,7 +1226,7 @@ div.hide-on-mobile { display: block !important; }
   .inline-form { display: grid;
   gap: 8px;
   align-items: flex-end;
-  grid-template-columns: 1fr 1fr; }
+  grid-template-columns:140px  1fr; }
   .form-group { width: 100%; }
   .log-submit-btn { width: 100%; }
 
