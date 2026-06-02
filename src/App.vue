@@ -47,7 +47,7 @@
       </div>
        <div  v-if="currentScreen === 'ledger' && selectedChild"  class="ledger-header">
           <div class="child-summary">
-             <img :src="(selectedChild.name == 'Eve') ? 'public/eve250.png' : 'public/jason250.png'" width="60" height="60" class="rowimg"/>
+             <img :src="(selectedChild.name == 'Eve') ? 'eve250.png' : 'jason250.png'" width="60" height="60" class="rowimg"/>
                 <div style="padding:8px;border-top: 2px solid black; display: grid;
   grid-template-columns: 1fr min-content min-content min-content;
   gap: 8px;  border-bottom: 2px solid black;padding-bottom: 5px !important;  " class="balance-badge" :class="calculateBalance(selectedChild.id) >= 0 ? 'pos-dark-dark' : 'neg-dark-dark'">
@@ -125,7 +125,7 @@
           <div v-else class="dashboard-rows-container">
             <div v-for="child in children" :key="child.id" class="child-row-layout">
               <div class="child-row-click-area" @click="navigateToLedger(child.id)">
-                <img :src="(child.name == 'Eve') ? 'public/eve250.png' : 'public/jason250.png'" class="child-avatar" width="60" height="60" style="flex-basis:1;margin-right:10px;" />
+                <img :src="(child.name == 'Eve') ? 'eve250.png' : 'jason250.png'" class="child-avatar" width="60" height="60" style="flex-basis:1;margin-right:10px;" />
                 <div class="child-row-info">
                   
                   <h3 :class="(child.name == 'Eve') ? 'girl': 'boy'">{{ child.name }} </h3>
@@ -159,7 +159,7 @@
           <form @submit.prevent="handleCreateTransaction" class="inline-form">
             <div class="form-group">
               <label>Date</label>
-              <input v-model="txForm.date" type="date" required />
+              <input v-model="txForm.date" type="date" required style="width: 120px"/>
             </div>
 
                <div class="form-group">
