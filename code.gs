@@ -1,84 +1,177 @@
 function doGet(e) {
   SpreadsheetApp.flush(); 
+  
   const sheet = SpreadsheetApp.getActiveSpreadsheet();
   const childrenSheet = sheet.getSheetByName("children");
   const txSheet = sheet.getSheetByName("transactions");
+  const authSheet = sheet.getSheetByName("authorized_devices"); // Add this
   
-  // Read All Children Records
-  const childData = childrenSheet.getDataRange().getValues();
-  const childHeaders = childData[0];
-  const children = [];
-  for (let i = 1; i < childData.length; i++) {
-    let obj = {};
-    childHeaders.forEach((header, index) => {
-      obj[header] = childData[i][index];
-    });
-    children.push(obj);
+  function parseSheetRecords(targetSheet) {
+    if (!targetSheet) return [];
+    const data = targetSheet.getDataRange().getValues();
+    if (data.length <= 1) return [];
+    
+    const headers = data[0].map(h => String(h).toLowerCase().trim());
+    const records = [];
+    
+    for (let i = 1; i < data.length; i++) {
+      let obj = {};
+      headers.forEach((header, index) => {
+        let val = data[i][index];
+        if (val instanceof Date) {
+          val = Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd");
+        }
+        obj[header] = val;
+      });
+      records.push(obj);
+    }
+    return records;
   }
   
-  // Read All Transaction Records
-  const txData = txSheet.getDataRange().getValues();
-  const txHeaders = txData[0];
-  const transactions = [];
-  for (let i = 1; i < txData.length; i++) {
-    let obj = {};
-    txHeaders.forEach((header, index) => {
-      obj[header] = txData[i][index];
-    });
-    transactions.push(obj);
+  const children = parseSheetRecords(childrenSheet);
+  const transactions = parseSheetRecords(txSheet);
+  
+  // Extract just the raw strings from the first column of the auth sheet
+  let authorizedDevices = [];
+  if (authSheet) {
+    const authData = authSheet.getDataRange().getValues();
+    authorizedDevices = authData.slice(1).map(row => String(row[0]).trim().toLowerCase());
   }
   
-  const payload = JSON.stringify({ children: children, transactions: transactions });
-  return ContentService.createTextOutput(payload).setMimeType(ContentService.MimeType.JSON);
-}
+  const payload = JSON.stringify({ 
+    children: children, 
+    transactions: transactions,
+    authorizedDevices: authorizedDevices // Add to payload
+  });
+  
+  return ContentService.createTextOutput(payload)
+                       .setMimeType(ContentService.MimeType.JSON);
+} 
 
 function doPost(e) {
   try {
     const params = JSON.parse(e.postData.contents);
     const sheet = SpreadsheetApp.getActiveSpreadsheet();
     
+    // --- PROTECTION LAYER ENGINE ---
+    const authSheet = sheet.getSheetByName("authorized_devices");
+    if (!authSheet) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "denied", message: "🔒 Security system missing configuration." }))
+                           .setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Extract whitelist array from the fingerprint column
+    const authData = authSheet.getDataRange().getValues();
+    const approvedFingerprints = authData.slice(1).map(row => String(row[0]).trim().toLowerCase());
+    
+    // Capture incoming structural credentials
+    const incomingFingerprint = String(params.fingerprint || "").trim().toLowerCase();
+    
+    // Block unauthorized incoming traffic immediately
+    if (!approvedFingerprints.includes(incomingFingerprint)) {
+      return ContentService.createTextOutput(JSON.stringify({ status: "denied", message: "🔒 Unauthorized Device: This hardware profile is not a registered administrator." }))
+                           .setMimeType(ContentService.MimeType.JSON);
+    }
+    // --- END PROTECTION LAYER ENGINE ---
+
+    // Execute standard mutation commands once verified
     if (params.action === "createChild") {
       const target = sheet.getSheetByName("children");
       target.appendRow([params.id, params.name, params.startAmount, params.weeklyAllowance]);
     } 
     else if (params.action === "createTransaction") {
       const target = sheet.getSheetByName("transactions");
-      target.appendRow([
+      
+      const headers = target.getDataRange().getValues()[0].map(h => String(h).toLowerCase().trim());
+      const deviceIdx = headers.indexOf("device");
+      const timestampIdx = headers.indexOf("timestamp");
+      
+      const rowData = [
         params.id, 
-        params.childId, 
+        params.childId || params.childid, 
         params.date, 
         params.what, 
         params.where, 
         params.type, 
         params.amount, 
         params.recordedBy
-      ]);
-    }
-    else if (params.action === "deleteTransaction") {
-      const target = sheet.getSheetByName("transactions");
-      const rows = target.getDataRange().getValues();
-      for (let i = rows.length - 1; i >= 1; i--) {
-        if (rows[i][0] === params.id) {
-          target.deleteRow(i + 1);
-          break;
-        }
+      ];
+      
+      // Inject device fingerprint if column exists
+      if (deviceIdx !== -1) {
+        rowData[deviceIdx] = incomingFingerprint;
       }
+      
+      // 🌟 NEW: Inject real-time execution timestamp if column exists
+      if (timestampIdx !== -1) {
+        rowData[timestampIdx] = new Date().toISOString();
+      }
+      
+      target.appendRow(rowData);
     }
     else if (params.action === "editTransaction") {
       const target = sheet.getSheetByName("transactions");
-      const rows = target.getDataRange().getValues();
-      for (let i = 1; i < rows.length; i++) {
-        if (rows[i][0] === params.id) {
-          target.getRange(i + 1, 3, 1, 6).setValues([[
-            params.date,
-            params.what,
-            params.where,
-            params.type,
-            params.amount,
-            params.recordedBy
-          ]]);
+      const data = target.getDataRange().getValues();
+      const headers = data[0].map(h => String(h).toLowerCase().trim());
+      
+      // Dynamically map exact header column indexes
+      const idIdx = headers.indexOf("id");
+      const dateIdx = headers.indexOf("date");
+      const whatIdx = headers.indexOf("what");
+      const whereIdx = headers.indexOf("where");
+      const typeIdx = headers.indexOf("type");
+      const amountIdx = headers.indexOf("amount");
+      const recordedByIdx = headers.indexOf("recordedby");
+
+      if (idIdx === -1) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Missing tracking ID header row." })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      let rowFound = false;
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][idIdx]).trim() === String(params.id).trim()) {
+          const rowNum = i + 1;
+          
+          // Write directly to coordinates determined by the sheet headers dynamically
+          if (dateIdx !== -1) target.getRange(rowNum, dateIdx + 1).setValue(params.date);
+          if (whatIdx !== -1) target.getRange(rowNum, whatIdx + 1).setValue(params.what);
+          if (whereIdx !== -1) target.getRange(rowNum, whereIdx + 1).setValue(params.where);
+          if (typeIdx !== -1) target.getRange(rowNum, typeIdx + 1).setValue(params.type);
+          if (amountIdx !== -1) target.getRange(rowNum, amountIdx + 1).setValue(params.amount);
+          if (recordedByIdx !== -1) target.getRange(rowNum, recordedByIdx + 1).setValue(params.recordedBy);
+          
+          rowFound = true;
           break;
         }
+      }
+      
+      if (!rowFound) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Transaction row target ID match not found." })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+    // 🌟 FIXED: ADDED THE ENTIRE MISSING DELETE ENGINE BLOCK
+    else if (params.action === "deleteTransaction") {
+      const target = sheet.getSheetByName("transactions");
+      const data = target.getDataRange().getValues();
+      const headers = data[0].map(h => String(h).toLowerCase().trim());
+      const idIdx = headers.indexOf("id");
+
+      if (idIdx === -1) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Missing 'id' column header alignment." })).setMimeType(ContentService.MimeType.JSON);
+      }
+
+      let rowDeleted = false;
+      // Loop backwards from bottom row to preserve indexing integrity when removing items
+      for (let i = data.length - 1; i >= 1; i--) {
+        if (String(data[i][idIdx]).trim() === String(params.id).trim()) {
+          target.deleteRow(i + 1);
+          rowDeleted = true;
+          break;
+        }
+      }
+      
+      if (!rowDeleted) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Target row deletion candidate row missing." })).setMimeType(ContentService.MimeType.JSON);
       }
     }
     
