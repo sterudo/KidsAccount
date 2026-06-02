@@ -8,11 +8,11 @@
 
     <h1 class="app-title"> <button style="float:left;"
           v-if="currentScreen === 'ledger'" 
-          @click="currentScreen = 'dashboard'" 
+          @click="backToDashboard" 
           class="btn btn-back-nav"
         >
           ⬅ Back
-        </button> Kids Accounts  v1.1</h1>
+        </button> Kids Accounts  v1.2</h1>
   <div id="app">
    <div v-if="isDeviceUnauthorized" class="card auth-warning-card">
     <h4>🔒 Authorizing this device ... please wait</h4>
@@ -47,9 +47,11 @@
       </div>
        <div  v-if="currentScreen === 'ledger' && selectedChild"  class="ledger-header">
           <div class="child-summary">
+             <img :src="(selectedChild.name == 'Eve') ? 'public/eve250.png' : 'public/jason250.png'" width="60" height="60" class="rowimg"/>
                 <div style="padding:8px;border-top: 2px solid black; display: grid;
   grid-template-columns: 1fr min-content min-content min-content;
   gap: 8px;  border-bottom: 2px solid black;padding-bottom: 5px !important;  " class="balance-badge" :class="calculateBalance(selectedChild.id) >= 0 ? 'pos-dark-dark' : 'neg-dark-dark'">
+                  
                   <span class="childsName"  :class="(selectedChild.name == 'Eve') ? 'girl': 'boy-dark'">{{ selectedChild.name }}</span>           
                   <span class="balancelabel">Balance</span>
                   <span class="currency" style="font-size:32px;  "> £</span>              
@@ -115,7 +117,7 @@
 
 
       <!-- VIEW 3: DASHBOARD (One Kid Per Row Layout) -->
-      <section v-if="currentScreen === 'dashboard'" class="screen">
+      <section v-if="currentScreen === 'dashboard'" class="screen" style="margin-top: 20px;">
         <div class="card list-card">
           <h2>Children's Accounts</h2>
           <p v-if="children.length === 0" class="empty-state">No accounts created yet. Use the "+ Add Child" tab above.</p>
@@ -123,15 +125,17 @@
           <div v-else class="dashboard-rows-container">
             <div v-for="child in children" :key="child.id" class="child-row-layout">
               <div class="child-row-click-area" @click="navigateToLedger(child.id)">
+                <img :src="(child.name == 'Eve') ? 'public/eve250.png' : 'public/jason250.png'" class="child-avatar" width="60" height="60" style="flex-basis:1;margin-right:10px;" />
                 <div class="child-row-info">
+                  
                   <h3 :class="(child.name == 'Eve') ? 'girl': 'boy'">{{ child.name }} </h3>
-                  <span class="allowance-label">Allowance: {{ formatCurrency(child.weeklyAllowance) }}/wk</span>
+                  <span class="allowance-label" style="text-align:left;">Allowance: {{ formatCurrency(child.weeklyAllowance) }}/wk</span>
                 </div>
                 <div class="child-row-balance" :class="calculateBalance(child.id) >= 0 ? 'pos-dark-dark' : 'neg-dark-dark'">
                   {{ formatCurrency(calculateBalance(child.id)) }}
                 </div>
               </div>
-             <div class="child-row-actions">
+             <div class="child-row-actions" v-if="currentUser === 'Dad'">
               <button 
                 v-if="isChildDeletable(child.id)" 
                 @click="handleDeleteChild(child.id)" 
@@ -267,10 +271,10 @@
 
             <div class="desktop-grid-body">
                  <div v-if="editingTxId" class="desktop-inline-edit-actions">
-                <span>⚠️ Editing the last entry. Review numbers before updating history.</span>
+                <span>⚠️ Review numbers.</span>
                 <div class="action-buttons-group">
-                  <button @click="saveInlineEdit(editingTxId)" class="btn-save-inline">Save Update</button>
-                  <button @click="cancelInlineEdit" class="btn-cancel-inline">Cancel</button>
+                  <button @click="saveInlineEdit(editingTxId)" class="btn-save-inline"  style="padding:4px 10px; font-size:0.85rem;border: 2px solid green;">Save</button>
+                  <button @click="cancelInlineEdit" class="btn-cancel-inline"  style="padding:4px 10px; font-size:0.85rem;border: 2px solid gray;">Cancel</button>
                   <button @click="handleDeleteLastTransaction(editingTxId)" class="btn-delete-row" style="padding:4px 10px; font-size:0.85rem;">Delete Entirely</button>
                 </div>
               </div>
@@ -305,9 +309,13 @@
                 </template>
 
                 <template v-else>
+                  <label>Date</label>
+                  <label>Desciption</label>
+                  <label>Where</label>
+                  <label>Amount (£)</label>
                   <div @click.stop><input v-model="editForm.date" type="date" class="table-input" /></div>
                   <div @click.stop><input v-model="editForm.what" type="text" class="table-input" /></div>
-                  <div @click.stop><input v-model="editForm.where" type="text" class="table-input" /></div>
+                  <div @click.stop ><input v-model="editForm.where" type="text" class="table-input" /></div>
                   <div @click.stop class="table-amount-edit-wrap">
                     <select v-model="editForm.type" class="table-select">
                       <option value="withdrawal">(-)</option>
@@ -437,6 +445,12 @@ async function fetchSyncDatabase() {
 // Add a reactive array to store the authorized fingerprints coming from the server
 const authorizedDevices = ref([]);
 
+function backToDashboard() {
+  selectedChildId.value = null;
+  currentScreen.value = 'dashboard';
+  window.scrollTo(0,0)
+}
+
 function formatTimestamp(tsStr) {
   if (!tsStr || tsStr === '-') return '-';
   // Formats '2026-06-02T19:45:00.000Z' to '02/06 19:45'
@@ -488,14 +502,14 @@ onMounted(() => {
   fetchSyncDatabase();
 // Helper function to check if 1 minute (60,000ms) has passed since the last sync
   function triggerThrottledRefresh() {
-    const oneMinute = 60 * 1000;
+    const fiveMinutes = 5 * 60 * 1000;
     const timeSinceLastSync = Date.now() - lastSyncTime.value;
 
-    if (timeSinceLastSync >= oneMinute) {
+    if (timeSinceLastSync >= fiveMinutes) {
       console.log(`Throttled sync allowed: ${Math.round(timeSinceLastSync / 1000)}s since last update.`);
       fetchSyncDatabase();
     } else {
-      console.log(`Throttled sync blocked: Only ${Math.round(timeSinceLastSync / 1000)}s ago. Must wait 60s.`);
+      console.log(`Throttled sync blocked: Only ${Math.round(timeSinceLastSync / 1000)}s ago. Must wait 5 minutes.`);
     }
   }
   // 🌟 ENHANCEMENT 2 & 3: Automatic updates when app is opened or brought to foreground
@@ -797,6 +811,7 @@ function navigateToLedger(childId) {
   selectedChildId.value = childId;
   txForm.value = { date: getTodayString(), what: '', where: '', type: 'withdrawal', amount: null };
   currentScreen.value = 'ledger';
+  window.scrollTo(0,0);
 }
 
 function selectHelper(field, val) { 
@@ -994,7 +1009,7 @@ margin-right: 32px;
   font-size: 24px;
 }
 
-#app { width:100%; max-width: 1200px; margin: 0 auto; }
+#app { width:100%; max-width: 1200px; margin: 0 auto; min-height:calc(100svh - 40px); }
 
 
 /* THE HEADER BAR CONTAINER */
@@ -1062,8 +1077,8 @@ margin-right: 32px;
 .child-row-click-area:hover { background: #756f6f; }
 .child-row-info h3 { margin: 0 0 4px 0; font-size: 1.5rem; color: rgb(223, 227, 236); }
 .allowance-label { font-size: 0.9rem; color: var(--text-muted); }
-.child-row-balance { font-size: 2.2rem; font-weight: 900; padding: 12px; border-radius: 6px; }
-.child-row-actions { padding-right: 20px; }
+.child-row-balance { font-size: 2rem; font-weight: 900; padding: 8px; border-radius: 6px; white-space: nowrap;}   
+.child-row-actions { padding-right: 0px; }
 
 /* SHARED SYSTEM CONTROLS */
 .btn { padding: 10px 16px; border: 1px solid transparent; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.95rem;margin: 2px;white-space: nowrap; }
@@ -1124,11 +1139,15 @@ input, select { padding: 6px !important; border: 1px solid var(--border-color); 
   position: relative;
 }
 .clickable-last-row:hover {
-  background-color: #395476 !important;
+  background-color: #423308 !important;
 }
 .editing-row {
-  background-color: #fffde7 !important;
+background: #362a06 !important;
   border: 2px solid #eab308 !important;
+  align-content: center;
+  grid-template-columns: 100px 1fr 1fr 124px !important;
+  gap: 0px 8px;
+  align-items: first baseline;
 }
 
 .desktop-inline-edit-actions {
@@ -1143,8 +1162,10 @@ input, select { padding: 6px !important; border: 1px solid var(--border-color); 
 }
 .action-buttons-group { display: flex; gap: 6px; }
 
-.table-input { padding: 6px; font-size: 0.9rem; border: 1px solid #eab308; border-radius: 4px; width: 100%; box-sizing: border-box; }
-.table-select { padding: 6px; font-size: 0.9rem; border: 1px solid #eab308; border-radius: 4px; }
+.table-input {padding: 2px !important;
+  font-size: 12px;border: 1px solid #eab308; border-radius: 4px; width: 100%; box-sizing: border-box; }
+.table-select { padding: 2px !important;
+  font-size: 12px; border: 1px solid #eab308; border-radius: 4px; }
 .table-amount-edit-wrap { display: flex; gap: 4px; justify-content: flex-end; }
 .amount-input-box { width: 80px; }
 
@@ -1164,7 +1185,7 @@ input, select { padding: 6px !important; border: 1px solid var(--border-color); 
 .pos-dark-dark { color: #71ffaa;  background-color: #184732;font-weight: bold; }
 .neg-dark-dark { color: #650000; background-color: #f8d7da; font-weight: bold; }
 .pos-dark-text { color: var(--success-dark); font-weight: bold; }
-.neg-text { color: #b91c1c; font-weight: bold; }
+.neg-text { color: #ff4646; font-weight: bold; }
 
 .relative-position { position: relative; }
 .helper-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: black; border: 1px solid var(--border-color); border-radius: 0 0 8px 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 100; }
@@ -1294,7 +1315,7 @@ button.Withdraw {
   div.show-only-on-mobile { display: flex !important; }
 
   /* Collapse Navigation Header into a robust block row stack */
-  .app-header { flex-direction: column; align-items: stretch; gap: 8px; border-bottom: none; margin-bottom:0px;top:40px; }
+  .app-header { flex-direction: column; align-items: stretch; gap:0px 8px; border-bottom: none; margin-bottom:0px;top:40px; }
   .nav-and-back-group { flex-direction: column; width: 100%; gap: 6px; display: grid;
     grid-template-columns: 1fr 1fr;}
   .nav-and-back-group .btn { width: 100%; padding: 4px; font-size: 1rem; text-align: center; }
@@ -1310,16 +1331,26 @@ button.Withdraw {
   .user-selector select { width: 65%;padding: 4px; }
 
   .child-row-layout { flex-direction: column; align-items: stretch; }
-  .child-row-actions { padding: 0 16px 16px 16px; }
+  .child-row-actions { padding: 0px; }
   .btn-delete-row { width: 100%; text-align: center; padding: 10px; }
 
   .inline-form { display: grid;
-  gap: 8px;
-  align-items: flex-end;
-  grid-template-columns:150px  1fr; }
+    gap: 0px 16px;
+    align-items: flex-end;
+    grid-template-columns: 150px 1fr; }
   .form-group { width: 100%; }
   .log-submit-btn { width: 100%; }
 
+  .form-group label {
+    position: relative;
+    top: 2px !important;
+    color: silver;
+  }
+  .form-group.relative-position label {
+    position: relative;
+    top: 10px !important;
+    color: silver;
+  }
   /* Mobile Stack List */
   .mobile-ledger-stack {
     display: flex;
@@ -1400,9 +1431,18 @@ button.Withdraw {
   cursor: not-allowed;
 }
 
+.rowimg {
+     position: absolute;
+    top: 47px;
+    left: 110px; 
+}
 /* Ensure mobile stacking rules do not distort header utilities button configurations */
 @media (max-width: 600px) {
-
+.rowimg {
+     position: absolute;
+    top: 6px;
+    left: 110px; 
+}
   .nav-and-back-group {
     display:none;
   }
