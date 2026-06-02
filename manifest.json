@@ -13,9 +13,10 @@
       "sizes": "512x512"
     }
   ],
-  "start_url": "/",
-  "background_color": "#f8fafc",
-  "theme_color": "#1e293b",
+  "start_url": "/KidsAccount/index.html",
+  "scope": "/KidsAccount/",
+  "background_color": "#0f172a",
+  "theme_color": "#17192d",
   "display": "standalone",
   "orientation": "portrait"
 }
