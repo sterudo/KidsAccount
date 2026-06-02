@@ -1,6 +1,7 @@
 <template>
+    <h1 class="app-title">Kids Account Manager v0.1</h1>
   <div id="app">
-        <div v-if="isDeviceUnauthorized" class="card auth-warning-card">
+   <div v-if="isDeviceUnauthorized" class="card auth-warning-card">
     <h4>🔒 Setup Required: Unauthorized Device</h4>
     <p>This phone cannot log entries or modify data yet. To activate administrator controls, add this fingerprint ID to your <code>authorized_devices</code> spreadsheet tab:</p>
     <div class="fingerprint-badge">
@@ -10,6 +11,7 @@
     <div v-else>
     <!-- GLOBAL TOP NAV BAR -->
     <header class="app-header">
+    
       <div class="nav-and-back-group">
         <!-- Back button dynamically placed to the left of Dashboard when on ledger screen -->
         <button 
@@ -21,8 +23,8 @@
         </button>
         
         <button @click="currentScreen = 'dashboard'" class="btn" :class="currentScreen === 'dashboard' ? 'btn-primary' : 'btn-secondary'">Dashboard</button>
-        <button @click="currentScreen = 'addChildSettings'" class="btn" :class="currentScreen === 'addChildSettings' ? 'btn-primary' : 'btn-secondary'">+ Add Child</button>
-        <button @click="currentScreen = 'addUserSettings'" class="btn" :class="currentScreen === 'addUserSettings' ? 'btn-primary' : 'btn-secondary'">+ Add User</button>
+        <button @click="currentScreen = 'addChildSettings'" class="dbb btn" :class="currentScreen === 'addChildSettings' ? 'btn-primary' : 'btn-secondary'">+ Add Child</button>
+        <button @click="currentScreen = 'addUserSettings'" class="dbb btn" :class="currentScreen === 'addUserSettings' ? 'btn-primary' : 'btn-secondary'">+ Add User</button>
       </div>
       
       <div class="user-selector">
@@ -35,7 +37,7 @@
 
     <main class="app-container">
 
-      <div v-if="isLoading" class="loading-overlay-indicator" style="background:#fef08a; padding:8px; font-weight:bold; text-align:center; border-radius:6px; margin-bottom:12px;">
+      <div v-if="isLoading" class="loading-overlay-indicator">
       🔄 Processing & Syncing Spreadsheet Cloud Database Engine...
     </div>
       
@@ -97,10 +99,10 @@
             <div v-for="child in children" :key="child.id" class="child-row-layout">
               <div class="child-row-click-area" @click="navigateToLedger(child.id)">
                 <div class="child-row-info">
-                  <h3>{{ child.name }}</h3>
+                  <h3 :class="(child.name == 'Eve') ? 'girl': 'boy'">{{ child.name }}</h3>
                   <span class="allowance-label">Allowance: {{ formatCurrency(child.weeklyAllowance) }}/wk</span>
                 </div>
-                <div class="child-row-balance" :class="calculateBalance(child.id) >= 0 ? 'pos-dark' : 'neg'">
+                <div class="child-row-balance" :class="calculateBalance(child.id) >= 0 ? 'pos-dark-dark' : 'neg-dark-dark'">
                   {{ formatCurrency(calculateBalance(child.id)) }}
                 </div>
               </div>
@@ -116,12 +118,13 @@
       <section v-if="currentScreen === 'ledger' && selectedChild" class="screen">
         <div class="ledger-header">
           <div class="child-summary">
-            <h2>{{ selectedChild.name }}'s Statement</h2>
-            <div class="balance-badge" :class="calculateBalance(selectedChild.id) >= 0 ? 'pos-dark' : 'neg'">
-              <span>Balance</span>
-              <strong>{{ formatCurrency(calculateBalance(selectedChild.id)) }}</strong>
-            </div>
-          </div>
+                <div style="padding:8px;border-top: 2px solid black;  border-bottom: 2px solid black;  " class="balance-badge" :class="calculateBalance(selectedChild.id) >= 0 ? 'pos-dark-dark' : 'neg-dark-dark'">
+                  <span class="childsName"  :class="(selectedChild.name == 'Eve') ? 'girl': 'boy'">{{ selectedChild.name }}'s Statement</span>           
+                  <span class="balancelabel">Balance</span>
+                  <span class="currency" style="font-size:32px; text-shadow: -1px -1px 1px white, 1px 1px 2px black; "> £</span>              
+                     <strong style="font-size:32px;">{{ calculateBalance(selectedChild.id).toFixed(2) }}</strong>
+                </div>    
+          </div>  
         </div>
 
         <!-- Transaction Input Form -->
@@ -132,8 +135,16 @@
               <label>Date</label>
               <input v-model="txForm.date" type="date" required />
             </div>
+
+               <div class="form-group">
+              <label>Type</label>
+              <select v-model="txForm.type">
+                <option value="withdrawal">Withdrawal (-)</option>
+                <option value="deposit">Deposit (+)</option>
+              </select>
+            </div>
             
-            <div class="form-group relative-position">
+            <div class="form-group relative-position" style="grid-column: 1 /3">
               <label>What (Description)</label>
               <div class="input-with-btn-layout">
                 <input v-model="txForm.what" type="text" placeholder="e.g. Ice cream" required @blur="closeHelperDeferred" />
@@ -146,7 +157,7 @@
               </div>
             </div>
 
-            <div class="form-group relative-position">
+            <div class="form-group relative-position" style="grid-column: 1 /3">
               <label>Where (Optional)</label>
               <div class="input-with-btn-layout">
                 <input v-model="txForm.where" type="text" placeholder="e.g. Corner Shop" @blur="closeHelperDeferred" />
@@ -159,18 +170,12 @@
               </div>
             </div>
 
-            <div class="form-group">
-              <label>Type</label>
-              <select v-model="txForm.type">
-                <option value="withdrawal">Withdrawal (-)</option>
-                <option value="deposit">Deposit (+)</option>
-              </select>
-            </div>
+         
             <div class="form-group">
               <label>Amount (£)</label>
-              <input v-model.number="txForm.amount" type="number" step="0.01" min="0.01" required />
+              <input v-model.number="txForm.amount" style="font-size:32px;height:55px;box-sizing: border-box;" type="number" step="0.01" min="0.01" required />
             </div>
-            <button type="submit" class="btn btn-primary log-submit-btn">Log</button>
+            <button type="submit " class="btn btn-primary log-submit-btn  " style="font-size:32px;height:55px;box-sizing: border-box;">Log</button>
           </form>
         </div>
 
@@ -213,9 +218,9 @@
           <!-- DESKTOP VIEW CONTAINER (Strictly hidden on mobile widths) -->
           <div class="desktop-ledger-view-wrapper hide-on-mobile">
             <div class="desktop-grid-header" :class="{ 'with-meta': showMetaFields }">
-              <div>Date</div>
-              <div>Description</div>
-              <div>Where</div>
+              <div  class="text-left">Date</div>
+              <div class="text-left">Description</div>
+              <div class="text-left where">Where</div>
               <div class="text-right">Amount</div>
               <template v-if="showMetaFields">
                 <div>Recorded By</div>
@@ -234,14 +239,14 @@
                   'editing-row': editingTxId === tx.id, 
                   'clickable-last-row': isLastTransaction(tx.id) 
                 }"
-                :style="showMetaFields ? 'grid-template-columns: 1.2fr 2fr 1.5fr 1.2fr 1.2fr 1.2fr 1.5fr' : 'grid-template-columns: 1.2fr 2fr 1.5fr 1.2fr'"
+                :style="showMetaFields ? 'grid-template-columns:100px 1fr 1fr 90px 130px 120px 120px' : 'grid-template-columns: 100px 1fr 1fr 90px'"
                 @click="handleRowClick(tx)"
               >
                 <!-- Row display logic / Form fields toggle during row selections -->
                 <template v-if="editingTxId !== tx.id">
-                  <div>{{ formatDate(tx.date) }}</div>
-                  <div>{{ tx.what }}</div>
-                  <div>{{ tx.where || '-' }}</div>
+                  <div class="text-left">{{ formatDate(tx.date) }}</div>
+                  <div class="text-left">{{ tx.what }}</div>
+                   <div class="text-left where">{{ tx.where || '-' }}</div>
                   <div class="text-right" :class="tx.type === 'deposit' ? 'pos-dark-text' : 'neg-text'">
                     {{ tx.type === 'deposit' ? '+' : '-' }}{{ formatCurrency(tx.amount) }}
                   </div>
@@ -282,11 +287,11 @@
               <!-- Pin Starting Balance cleanly to the absolute bottom of the list -->
               <div 
                 class="desktop-grid-row initial-balance-row"
-                :style="showMetaFields ? 'grid-template-columns: 1.2fr 2fr 1.5fr 1.2fr 1.2fr 1.2fr 1.5fr' : 'grid-template-columns: 1.2fr 2fr 1.5fr 1.2fr'"
+                :style="showMetaFields ? 'grid-template-columns:100px 1fr 1fr 90px 130px 120px 120px' : 'grid-template-columns: 100px 1fr 1fr 90px'"
               >
                 <div>-</div>
                 <div><strong>Starting Balance</strong></div>
-                <div>-</div>
+                <div class="where">-</div>
                 <div class="text-right pos-dark-text">{{ formatCurrency(selectedChild.startAmount) }}</div>
                 <template v-if="showMetaFields">
                   <div>-</div><div>-</div><div>-</div>
@@ -295,74 +300,12 @@
             </div>
           </div>
 
-          <!-- NEW MOBILE STACKED VIEW (Strictly hidden on desktop widths) -->
-          <div class="mobile-ledger-stack show-only-on-mobile">
-            <div v-for="tx in baseFilteredTransactions" :key="tx.id" class="mobile-tx-card" :class="{ 'editing-row': editingTxId === tx.id }">
-              
-              <template v-if="editingTxId !== tx.id">
-                <!-- Two Rows Layout Design Pattern Requirements -->
-                <div class="mobile-tx-row-one" @click="handleRowClick(tx)">
-                  <span class="mobile-tx-date">{{ formatDateMobile(tx.date) }}</span>
-                  <span class="mobile-tx-amount" :class="tx.type === 'deposit' ? 'pos-dark-text' : 'neg-text'">
-                    {{ tx.type === 'deposit' ? '+' : '-' }}{{ formatCurrency(tx.amount) }}
-                  </span>
-                </div>
-                <div class="mobile-tx-row-two" @click="handleRowClick(tx)">
-                  <span class="mobile-tx-what">{{ tx.what }}</span>
-                  <span v-if="tx.where" class="mobile-tx-where">📍 {{ tx.where }}</span>
-                </div>
-              </template>
-
-              <!-- Custom Inline form panel if user selected mobile last row element -->
-              <template v-else>
-                <div class="mobile-edit-form-wrap">
-                  <div class="form-vertical-group">
-                    <label>Date</label>
-                    <input v-model="editForm.date" type="date" class="table-input" />
-                  </div>
-                  <div class="form-vertical-group">
-                    <label>What</label>
-                    <input v-model="editForm.what" type="text" class="table-input" />
-                  </div>
-                  <div class="form-vertical-group">
-                    <label>Where</label>
-                    <input v-model="editForm.where" type="text" class="table-input" />
-                  </div>
-                  <div class="form-vertical-group">
-                    <label>Type & Amount</label>
-                    <div style="display:flex; gap:8px;">
-                      <select v-model="editForm.type" class="table-select" style="flex:1;">
-                        <option value="withdrawal">Withdrawal (-)</option>
-                        <option value="deposit">Deposit (+)</option>
-                      </select>
-                      <input v-model.number="editForm.amount" type="number" step="0.01" class="table-input" style="flex:2;" />
-                    </div>
-                  </div>
-                  <div class="mobile-edit-btn-actions">
-                    <button @click="saveInlineEdit(tx.id)" class="btn-save-inline" style="flex:1; padding: 12px;">Save Changes</button>
-                    <button @click="handleDeleteLastTransaction(tx.id)" class="btn-delete-inline-mobile" style="flex:1; padding:12px;">Delete Entry</button>
-                    <button @click="cancelInlineEdit" class="btn-cancel-inline" style="padding: 12px;">X</button>
-                  </div>
-                </div>
-              </template>
-            </div>
-
-            <!-- Mobile Pinned Baseline Balance Card -->
-            <div class="mobile-tx-card initial-balance-row">
-              <div class="mobile-tx-row-one">
-                <span class="mobile-tx-date">Opening Account Milestone</span>
-                <span class="mobile-tx-amount pos-dark-text">{{ formatCurrency(selectedChild.startAmount) }}</span>
-              </div>
-              <div class="mobile-tx-row-two">
-                <span class="mobile-tx-what">🌱 Starting Balance</span>
-              </div>
-            </div>
-          </div>
+        
 
         </div>
       </section>
     </main>
-  ></div>
+  </div>
   </div>
 </template>
 
@@ -561,12 +504,16 @@ function generateUniqueList(field, currentInput) {
   return uniqueItems.slice(0, 5);
 }
 
+function childHasTransactions(childId) {
+  return transactions?.value?.some(tx => String(tx.childid) === String(childId));
+}
+
 function isChildDeletable(childId) {
-  return !transactions.value.some(t => String(t.childId) === String(childId));
+  return !childHasTransactions(childId);
 }
 
 function isUserDeletable(userName) {
-  return !transactions.value.some(t => t.recordedBy === userName) && users.value.length > 1;
+  return !transactions?.value?.some(t => t.recordedBy === userName) && users?.value?.length > 1;
 }
 
 function isLastTransaction(txId) {
@@ -768,27 +715,90 @@ function formatDateMobile(dStr) {
 </script>
 
 <style>
+
 :root {
   --bg-color: #f8fafc;
   --card-bg: #ffffff;
   --text-main: #0f172a;
   --text-muted: #475569;
-  --primary: #1e293b;
+  --primary: navy;
   --secondary: #e2e8f0;
-  --success-dark: #1b4332;
-  --danger-dark: #7a1c1c;
+  --success-dark:#25f578;;
+  --danger-dark: #e44242;
   --border-color: #cbd5e1;
 }
-
+:root {
+  --bg-color: #0f172a;       /* Deep slate background */
+  --card-bg: #1e293b;        /* Lighter slate for cards to pop against the background */
+  --text-main: #f8fafc;      /* Crisp, off-white for primary text readable on dark rows */
+  --text-muted: #94a3b8;     /* Soft grey-blue for secondary text or helper labels */
+  --primary: #38bdf8;        /* Swapped dark 'navy' for a vibrant electric sky blue */
+  --secondary: #334155;      /* Dark slate wrapper for subtle buttons/background tabs */
+   --success-dark:#25f578;
+  --danger-dark: #e44242;
+  --border-color: #334155;   /* Subtle divider lines that split elements without being harsh */
+}
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background-color: var(--bg-color);
   color: var(--text-main);
-  padding: 16px;
+  padding: 0px;
 }
 
-#app { max-width: 1200px; margin: 0 auto; }
+h1 {
+  font-size: 40px;
+  letter-spacing: -1.68px;
+  margin: 0px;
+    margin-top: 0px;
+  color: white;
+  margin-top: 0px;
+  background: #002754;
+  padding: 19px;
+  position: sticky;
+  top: 0px;
+  z-index: 1000;
+}
+
+h2 {
+  font-size: 24px;
+  line-height: 118%;
+  letter-spacing: -0.24px;
+  margin: 0 0 8px;
+  color: #c0d7f1;
+  font-weight: bold;
+}
+
+h3 {
+  color: #c0d7f1;
+  margin-top: 0px;
+  margin-bottom: 10px;
+  text-align: left;
+}
+
+label {
+  text-align: left;
+  margin-left: 8px;
+  font-size: 0.8em;
+}
+
+input, select {
+  font-family: arial, sans-serif;
+  padding: 6px;
+}
+
+.currency {
+  font-weight: normal !important;
+}
+
+.childsName {
+margin-right: 32px;
+  color: var(--primary);
+  font-size: 24px;
+}
+
+#app { width:100%; max-width: 1200px; margin: 0 auto; }
+
 
 /* THE HEADER BAR CONTAINER */
 .app-header {
@@ -796,10 +806,15 @@ body {
   justify-content: space-between;
   align-items: center;
   border-bottom: 2px solid var(--border-color);
-  padding-bottom: 12px;
-  margin-bottom: 20px;
+  padding-bottom: 0px;
+  margin-bottom: 0px;
   gap: 12px;
+  position: sticky;
+  top: 60px;
+  background: #17192d;
+  z-index: 1000;
 }
+
 
 .nav-and-back-group {
   display: flex;
@@ -808,13 +823,13 @@ body {
 }
 
 .btn-back-nav {
-  background: #f1f5f9;
-  border: 2px solid #94a3b8 !important;
-  color: #334155 !important;
+  background: var(--secondary);
+  border: 2px solid #17202d !important;
+  color: var(--primary) !important;
   transition: all 0.2s ease;
 }
 .btn-back-nav:hover {
-  background: #cbd5e1;
+  background:var(--secondary);
 }
 
 .user-selector { display: flex; align-items: center; gap: 8px; font-weight: bold; }
@@ -827,18 +842,24 @@ body {
   margin-bottom: 20px;
 }
 
+.loading-overlay-indicator {
+  background:#373210; 
+  color:white;
+  padding:8px; font-weight:bold; text-align:center; border-radius:6px; margin-bottom:12px;
+}
+
 /* SINGLE CARDS ROW PER CHILD */
 .dashboard-rows-container { display: flex; flex-direction: column; gap: 12px; }
-.child-row-layout { display: flex; background: white; border: 2px solid var(--border-color); border-radius: 12px; align-items: center; overflow: hidden; }
+.child-row-layout { display: flex; background: #3d3d3d; border: 2px solid var(--border-color); border-radius: 12px; align-items: center; overflow: hidden; }
 .child-row-click-area { display: flex; flex: 1; justify-content: space-between; align-items: center; padding: 20px; cursor: pointer; }
-.child-row-click-area:hover { background: #f1f5f9; }
-.child-row-info h3 { margin: 0 0 4px 0; font-size: 1.5rem; color: var(--text-main); }
+.child-row-click-area:hover { background: #756f6f; }
+.child-row-info h3 { margin: 0 0 4px 0; font-size: 1.5rem; color: rgb(223, 227, 236); }
 .allowance-label { font-size: 0.9rem; color: var(--text-muted); }
-.child-row-balance { font-size: 2.2rem; font-weight: 900; padding: 4px 12px; border-radius: 6px; }
+.child-row-balance { font-size: 2.2rem; font-weight: 900; padding: 12px; border-radius: 6px; }
 .child-row-actions { padding-right: 20px; }
 
 /* SHARED SYSTEM CONTROLS */
-.btn { padding: 10px 16px; border: 1px solid transparent; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.95rem;}
+.btn { padding: 10px 16px; border: 1px solid transparent; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.95rem;margin: 2px;white-space: nowrap; }
 .btn-primary { background: var(--primary); color: white; }
 .btn-secondary { background: var(--secondary); color: var(--primary); }
 .btn-success { background: var(--success-dark); color: white; }
@@ -853,7 +874,10 @@ body {
 .deletable-list { list-style: none; padding: 0; }
 .deletable-list li { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid var(--secondary); align-items: center; }
 
-.inline-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.inline-form { display: grid;
+  gap: 12px;
+  align-items: flex-end;
+  grid-template-columns: 1fr 1fr; }
 .form-group { display: flex; flex-direction: column; flex: 1; min-width: 140px; }
 .log-submit-btn { padding: 12px 24px; min-width: 100px; }
 input, select { padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 1rem; }
@@ -868,15 +892,15 @@ input, select { padding: 10px; border: 1px solid var(--border-color); border-rad
 }
 .desktop-grid-header {
   display: grid;
-  grid-template-columns: 1.2fr 2fr 1.5fr 1.2fr;
-  background: #f1f5f9;
+  grid-template-columns:100px 1fr 1fr 90px;
+  background: #101011;
   padding: 12px;
   font-weight: bold;
   font-size: 0.95rem;
   border-bottom: 2px solid var(--border-color);
 }
 .desktop-grid-header.with-meta {
-  grid-template-columns: 1.2fr 2fr 1.5fr 1.2fr 1.2fr 1.2fr 1.5fr;
+  grid-template-columns: 100px 1fr 1fr 90px 130px 120px 120px;
 }
 .desktop-grid-row {
   display: grid;
@@ -885,7 +909,7 @@ input, select { padding: 10px; border: 1px solid var(--border-color); border-rad
   align-items: center;
   font-size: 0.95rem;
 }
-.desktop-grid-row:nth-child(even) { background: #f8fafc; }
+.desktop-grid-row:nth-child(even) { background: #505051; }
 
 /* Interactive feedback on the primary editable action row */
 .clickable-last-row {
@@ -893,7 +917,7 @@ input, select { padding: 10px; border: 1px solid var(--border-color); border-rad
   position: relative;
 }
 .clickable-last-row:hover {
-  background-color: #eff6ff !important;
+  background-color: #395476 !important;
 }
 .editing-row {
   background-color: #fffde7 !important;
@@ -904,7 +928,7 @@ input, select { padding: 10px; border: 1px solid var(--border-color); border-rad
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #fef08a;
+  background: #6a6228;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border-color);
   font-weight: 500;
@@ -917,7 +941,7 @@ input, select { padding: 10px; border: 1px solid var(--border-color); border-rad
 .table-amount-edit-wrap { display: flex; gap: 4px; justify-content: flex-end; }
 .amount-input-box { width: 80px; }
 
-.initial-balance-row { background: #fefcf0 !important; font-style: italic; color: var(--text-muted); }
+.initial-balance-row { background: #040f06 !important; font-style: italic; color: var(--text-muted); }
 
 .search-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 12px; }
 .filter-header-row { display: flex; justify-content: space-between; align-items: center; }
@@ -926,17 +950,20 @@ input, select { padding: 10px; border: 1px solid var(--border-color); border-rad
 .meta-cell { font-size: 0.8rem; color: #64748b; word-break: break-all; }
 .mono { font-family: monospace; }
 .text-right { text-align: right; }
+.text-left { text-align: left; }
 
 .pos-dark { color: var(--success-dark); background-color: #d1e7dd; font-weight: bold; }
 .neg { color: var(--danger-dark); background-color: #f8d7da; font-weight: bold; }
+.pos-dark-dark { color: #71ffaa;  background-color: #184732;font-weight: bold; }
+.neg-dark-dark { color: #650000; background-color: #f8d7da; font-weight: bold; }
 .pos-dark-text { color: var(--success-dark); font-weight: bold; }
 .neg-text { color: #b91c1c; font-weight: bold; }
 
 .relative-position { position: relative; }
-.helper-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid var(--border-color); border-radius: 0 0 8px 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 100; }
+.helper-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: black; border: 1px solid var(--border-color); border-radius: 0 0 8px 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 100; }
 .helper-dropdown ul { list-style: none; padding: 0; margin: 0; }
-.helper-dropdown li { padding: 10px; cursor: pointer; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
-.helper-dropdown li:hover { background: #f1f5f9; }
+.helper-dropdown li { padding: 10px; cursor: pointer; border-bottom: 1px solid #151515; font-size: 0.9rem;color:white; }
+.helper-dropdown li:hover { background: #151515; }
 
 .empty-state { text-align: center; padding: 40px; color: var(--text-muted); }
 
@@ -983,7 +1010,7 @@ div.hide-on-mobile { display: block !important; }
   min-width: 0; /* Prevents input blowout in small flex cells */
 }
 .btn-assist {
-  background: #f1f5f9;
+  background: #304a63;
   border: 1px solid var(--border-color);
   padding: 10px;
   border-radius: 6px;
@@ -992,35 +1019,73 @@ div.hide-on-mobile { display: block !important; }
   transition: background 0.2s ease;
 }
 .btn-assist:hover {
-  background: #e2e8f0;
+  background: #517494;
+}
+
+.desktop-grid-row {
+  background: #373738;
+}
+.desktop-grid-row:nth-child(2n) {
+  background: #212121;
+}
+
+.girl {
+  color: #ff4ca5 !important;
+}
+
+.boy {
+  color:#6bf8ff !important
 }
 /* --- TWO-ROW-PER-TRANSACTION MOBILE LAYOUT RULES --- */
 @media (max-width: 600px) {
+  .dbb {
+    display: none;
+  }
+
+  h1 {
+    margin: 0px;
+  padding: 10px;
+  font-size: 28px;
+  }
+
+  h3 {
+    margin-bottom: 4px;
+  text-align: left;
+  font-size: 1.1em;
+  }
+
+  .balancelabel {
+    display:none;
+  }
+
   .hide-on-mobile { display: none !important; }
   .show-only-on-mobile { display: flex !important; }
   div.show-only-on-mobile { display: flex !important; }
 
   /* Collapse Navigation Header into a robust block row stack */
-  .app-header { flex-direction: column; align-items: stretch; gap: 8px; border-bottom: none; margin-bottom: 10px; }
-  .nav-and-back-group { flex-direction: column; width: 100%; gap: 6px; }
-  .nav-and-back-group .btn { width: 100%; padding: 12px; font-size: 1rem; text-align: center; }
+  .app-header { flex-direction: column; align-items: stretch; gap: 8px; border-bottom: none; margin-bottom:0px;top:40px; }
+  .nav-and-back-group { flex-direction: column; width: 100%; gap: 6px; display: grid;
+    grid-template-columns: 1fr 1fr;}
+  .nav-and-back-group .btn { width: 100%; padding: 4px; font-size: 1rem; text-align: center; }
   
   .user-selector { 
     width: 100%; 
     box-sizing: border-box; 
     justify-content: space-between; 
     padding: 10px; 
-    background: white; 
     border: 1px solid var(--border-color); 
     border-radius: 6px; 
   }
-  .user-selector select { width: 65%; }
+  .user-selector select { width: 65%;padding: 4px; }
 
   .child-row-layout { flex-direction: column; align-items: stretch; }
   .child-row-actions { padding: 0 16px 16px 16px; }
   .btn-delete-row { width: 100%; text-align: center; padding: 10px; }
 
-  .inline-form { flex-direction: column; align-items: stretch; gap: 8px; }
+  .inline-form { display: grid;
+  gap: 8px;
+  align-items: flex-end;
+  grid-template-columns: 1fr 1fr; }
   .form-group { width: 100%; }
   .log-submit-btn { width: 100%; }
 
@@ -1032,13 +1097,16 @@ div.hide-on-mobile { display: block !important; }
     margin-top: 10px;
   }
   .mobile-tx-card {
-    background: #ffffff;
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 14px;
     display: flex;
     flex-direction: column;
     gap: 6px;
+  }
+
+  .card { 
+    padding:8px;
   }
   .mobile-tx-row-one {
     display: flex;
@@ -1061,6 +1129,13 @@ div.hide-on-mobile { display: block !important; }
   .btn-delete-inline-mobile { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; border-radius: 6px; font-weight: bold; cursor: pointer; }
   .btn-save-inline { border-radius: 6px; }
   .btn-cancel-inline { border-radius: 6px; }
+  .desktop-grid-row {
+  background: #373738;
+}
+.desktop-grid-row:nth-child(2n) {
+  background: #212121;
+}
+.search-filter-grid,.filter-header-row  .btn-tiny, .where { display: none; }
 
 }
 </style>
