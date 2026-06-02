@@ -405,9 +405,40 @@ async function fetchSyncDatabase() {
     const res = await fetch(cacheBusterUrl);
     const data = await res.json();
     
-    children.value = data.children || [];
-    transactions.value = data.transactions || [];
-    authorizedDevices.value = data.authorizedDevices || []; // Capture the list
+    // 1. Normalize Children Data to prevent NaN
+    children.value = (data.children || []).map(child => {
+      // Safely fall back to lowercase keys if Google changed the headers
+      const startAmt = child.startAmount !== undefined ? child.startAmount : child.startamount;
+      const allowance = child.weeklyAllowance !== undefined ? child.weeklyAllowance : child.weeklyallowance;
+      
+      return {
+        id: String(child.id || ''),
+        name: String(child.name || 'Unknown'),
+        // Ensure strings are forced to clean floating numbers
+        startAmount: isNaN(parseFloat(startAmt)) ? 0 : parseFloat(startAmt),
+        weeklyAllowance: isNaN(parseFloat(allowance)) ? 0 : parseFloat(allowance)
+      };
+    });
+
+    // 2. Normalize Transactions Data
+    transactions.value = (data.transactions || []).map(tx => {
+      const amt = tx.amount !== undefined ? tx.amount : tx.amount;
+      return {
+        id: String(tx.id || ''),
+        childid: tx.childid !== undefined ? String(tx.childid) : String(tx.childId || ''),
+        date: String(tx.date || ''),
+        what: String(tx.what || ''),
+        where: String(tx.where || ''),
+        type: String(tx.type || 'withdrawal'),
+        amount: isNaN(parseFloat(amt)) ? 0 : parseFloat(amt),
+        recordedBy: String(tx.recordedby || tx.recordedBy || 'System')
+      };
+    });
+    
+    // 3. Normalize Authorized Devices
+    authorizedDevices.value = (data.authorizedDevices || []).map(d => String(d).toLowerCase().trim());
+    
+    console.log("Normalized Database Clean Sync:", children.value, transactions.value);
   } catch (err) {
     console.error("Database initialization fault:", err);
   } finally {
