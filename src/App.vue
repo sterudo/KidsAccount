@@ -106,9 +106,16 @@
                   {{ formatCurrency(calculateBalance(child.id)) }}
                 </div>
               </div>
-              <div class="child-row-actions">
-                <button v-if="isChildDeletable(child.id)" @click="handleDeleteChild(child.id)" class="btn-delete-row" title="Delete Child Account">Delete Account</button>
-              </div>
+             <div class="child-row-actions">
+              <button 
+                v-if="isChildDeletable(child.id)" 
+                @click="handleDeleteChild(child.id)" 
+                class="btn-delete-row" 
+                title="Delete Child Account"
+              >
+                Delete Account
+              </button>
+            </div>
             </div>
           </div>
         </div>
@@ -505,7 +512,8 @@ function generateUniqueList(field, currentInput) {
 }
 
 function childHasTransactions(childId) {
-  return transactions?.value?.some(tx => String(tx.childid) === String(childId));
+  // Safe array evaluation checking the lowercase key
+  return transactions.value.some(tx => String(tx.childid).trim() === String(childId).trim());
 }
 
 function isChildDeletable(childId) {
@@ -568,7 +576,7 @@ async function handleCreateTransaction() {
     action: "createTransaction",
     fingerprint: deviceFingerprint.value, // Pass validation tag
     id: 'tx_' + Date.now(),
-    childId: String(selectedChildId.value),
+    childid: String(selectedChildId.value), // 🌟 FIXED: Changed from childId to childid
     date: txForm.value.date,
     what: txForm.value.what,
     where: txForm.value.where || '-',
