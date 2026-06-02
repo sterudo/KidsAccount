@@ -157,12 +157,19 @@
                 <option value="deposit">Deposit (+)</option>
               </select>
             </div>
-            
-            <div class="form-group relative-position" style="grid-column: 1 /3">
+                        
+            <div class="form-group relative-position" style="grid-column: 1 / 3">
               <label>What (Description)</label>
               <div class="input-with-btn-layout">
-                <input v-model="txForm.what" type="text" placeholder="e.g. Ice cream" required @blur="closeHelperDeferred" />
-                <button type="button" @click="toggleHelper('what')" class="btn btn-assist" title="Show past descriptions">✨</button>
+                <input 
+                  v-model="txForm.what" 
+                  type="text" 
+                  placeholder="e.g. Ice cream" 
+                  required 
+                  @focus="activeHelper = 'what'"
+                  @blur="closeHelperDeferred" 
+                />
+                <button type="button" @click.prevent.stop="activeHelper = 'what'" class="btn btn-assist" title="Show past descriptions">✨</button>
               </div>
               <div v-if="activeHelper === 'what' && dynamicSuggestionsWhat.length > 0" class="helper-dropdown">
                 <ul>
@@ -171,11 +178,17 @@
               </div>
             </div>
 
-            <div class="form-group relative-position" style="grid-column: 1 /3">
+            <div class="form-group relative-position" style="grid-column: 1 / 3">
               <label>Where (Optional)</label>
               <div class="input-with-btn-layout">
-                <input v-model="txForm.where" type="text" placeholder="e.g. Corner Shop" @blur="closeHelperDeferred" />
-                <button type="button" @click="toggleHelper('where')" class="btn btn-assist" title="Show past locations">✨</button>
+                <input 
+                  v-model="txForm.where" 
+                  type="text" 
+                  placeholder="e.g. Corner Shop" 
+                  @focus="activeHelper = 'where'"
+                  @blur="closeHelperDeferred" 
+                />
+                <button type="button" @click.prevent.stop="activeHelper = 'where'" class="btn btn-assist" title="Show past locations">✨</button>
               </div>
               <div v-if="activeHelper === 'where' && dynamicSuggestionsWhere.length > 0" class="helper-dropdown">
                 <ul>
@@ -479,62 +492,66 @@ const filteredTransactions = computed(() => {
   }
   return txs;
 });
+// 🌟 FIX: Access transactions.value directly inside the computed wrapper to force Vue dependency tracking
+const dynamicSuggestionsWhat = computed(() => {
+  if (!transactions.value || transactions.value.length === 0) return [];
+  return generateUniqueList('what', txForm.value.what);
+});
 
-const dynamicSuggestionsWhat = computed(() => generateUniqueList('what', txForm.value.what));
-const dynamicSuggestionsWhere = computed(() => generateUniqueList('where', txForm.value.where));
+const dynamicSuggestionsWhere = computed(() => {
+  if (!transactions.value || transactions.value.length === 0) return [];
+  return generateUniqueList('where', txForm.value.where);
+});
 
 function generateUniqueList(field, currentInput) {
-  const searchKey = String(field).toLowerCase().trim();
+  const primaryKey = String(field).trim(); // e.g., 'what' or 'where'
   
-  // 1. Extract all raw values matching the field from history
-  const historyItems = transactions.value
-    .map(t => String(t[searchKey] || t[field] || '').trim())
+  // 1. Reference array directly inside execution block 
+  const currentHistory = transactions.value || [];
+  if (currentHistory.length === 0) return [];
+
+  // 2. Map history values safely by looking up both camelCase and lowercase variants
+  const historyItems = currentHistory
+    .map(t => {
+      const val = t[primaryKey] !== undefined ? t[primaryKey] : t[primaryKey.toLowerCase()];
+      return String(val || '').trim();
+    })
     .filter(val => val && val !== '-');
 
   if (historyItems.length === 0) return [];
 
-  // 2. Build metadata maps for tracking Frequency and Latest appearance
+  // 3. Build explicit frequency and recency calculation maps
   const frequencyMap = {};
-  const latestIndexMap = {}; // Since transactions are sorted, index tells us recency
+  const latestIndexMap = {}; 
 
   historyItems.forEach((item, index) => {
-    // Frequency tracking
     frequencyMap[item] = (frequencyMap[item] || 0) + 1;
-    
-    // Recency tracking (first time we see it in the array is the most recent)
     if (latestIndexMap[item] === undefined) {
       latestIndexMap[item] = index;
     }
   });
 
-  // 3. Get unique items and filter them by what the user is currently typing
+  // 4. De-duplicate unique history suggestions
   let uniqueItems = [...new Set(historyItems)];
   
+  // 5. Narrow down the list based on what the user is currently typing
   if (currentInput) {
-    const search = currentInput.toLowerCase();
+    const search = String(currentInput).toLowerCase().trim();
     uniqueItems = uniqueItems.filter(item => item.toLowerCase().includes(search));
   }
 
-  // 4. Apply multi-tier sorting rules:
-  //    Rule A: Most Used (Highest frequency count wins)
-  //    Rule B: Latest Logged (Lowest index wins if counts tie)
-  //    Rule C: Alphabetical (Standard fallback character comparison)
+  // 6. Apply multi-tier sorting parameters (Frequency -> Recency -> Alphabetical)
   uniqueItems.sort((a, b) => {
-    // Sort Tier 1: Frequency (Most Used)
     if (frequencyMap[b] !== frequencyMap[a]) {
-      return frequencyMap[b] - frequencyMap[a];
+      return frequencyMap[b] - frequencyMap[a]; // Most frequently used items win
     }
-    
-    // Sort Tier 2: Recency (Latest)
     if (latestIndexMap[a] !== latestIndexMap[b]) {
-      return latestIndexMap[a] - latestIndexMap[b]; 
+      return latestIndexMap[a] - latestIndexMap[b]; // Most recently logged items win
     }
-    
-    // Sort Tier 3: Alphabetical Fallback
     return a.localeCompare(b);
   });
 
-  // 5. Return the top 5 most optimal suggestions to keep the UI clean
+  // 7. Return top 5 optimized candidates
   return uniqueItems.slice(0, 5);
 }
 
@@ -729,7 +746,12 @@ function navigateToLedger(childId) {
   txForm.value = { date: getTodayString(), what: '', where: '', type: 'withdrawal', amount: null };
   currentScreen.value = 'ledger';
 }
-function selectHelper(field, val) { txForm.value[field] = val; activeHelper.value = null; }
+
+function selectHelper(field, val) { 
+  txForm.value[field] = val; 
+  // Force active helper state to close completely on click selection
+  activeHelper.value = null; 
+}
 
 function toggleHelper(field) {
   if (activeHelper.value === field) {
