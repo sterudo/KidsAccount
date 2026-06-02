@@ -1,5 +1,13 @@
 <template>
   <div id="app">
+        <div v-if="isDeviceUnauthorized" class="card auth-warning-card">
+    <h4>🔒 Setup Required: Unauthorized Device</h4>
+    <p>This phone cannot log entries or modify data yet. To activate administrator controls, add this fingerprint ID to your <code>authorized_devices</code> spreadsheet tab:</p>
+    <div class="fingerprint-badge">
+      <code>{{ deviceFingerprint }}</code>
+    </div>
+    </div>
+    <div v-else>
     <!-- GLOBAL TOP NAV BAR -->
     <header class="app-header">
       <div class="nav-and-back-group">
@@ -76,6 +84,8 @@
           </div>
         </div>
       </section>
+
+
 
       <!-- VIEW 3: DASHBOARD (One Kid Per Row Layout) -->
       <section v-if="currentScreen === 'dashboard'" class="screen">
@@ -352,6 +362,7 @@
         </div>
       </section>
     </main>
+  ></div>
   </div>
 </template>
 
@@ -386,18 +397,17 @@ const filterStartDate = ref('');
 const filterEndDate = ref('');
 
 // --- DATA ACCESS LAYER ---
+// Update your fetchSyncDatabase function to store it
 async function fetchSyncDatabase() {
   isLoading.value = true;
   try {
-    // Append a unique cache-buster timestamp parameter to force Google to fetch fresh rows
     const cacheBusterUrl = `${SHEET_API_URL}?_cb=${Date.now()}`;
     const res = await fetch(cacheBusterUrl);
     const data = await res.json();
     
     children.value = data.children || [];
     transactions.value = data.transactions || [];
-    
-    console.log("Database Sync Complete:", transactions.value);
+    authorizedDevices.value = data.authorizedDevices || []; // Capture the list
   } catch (err) {
     console.error("Database initialization fault:", err);
   } finally {
@@ -405,9 +415,27 @@ async function fetchSyncDatabase() {
   }
 }
 
+// Add a reactive array to store the authorized fingerprints coming from the server
+const authorizedDevices = ref([]);
 
+
+
+// Check if this device fingerprint is missing from the authorized list
+const isDeviceUnauthorized = computed(() => {
+  return !authorizedDevices.value.includes(deviceFingerprint.value.toLowerCase().trim());
+});
+
+
+const deviceFingerprint = ref('fp-unknown');
 
 onMounted(() => {
+  let fp = localStorage.getItem('pocket_money_fingerprint');
+  if (!fp) {
+    fp = `fp-${Math.random().toString(36).substring(2, 7)}`;
+    localStorage.setItem('pocket_money_fingerprint', fp);
+  }
+  deviceFingerprint.value = fp;
+  console.log("Your Device Authorization Fingerprint is:", fp); // Look here in your console to copy it!
   fetchSyncDatabase();
 });
 
@@ -525,9 +553,11 @@ function handleRowClick(tx) {
   }
 }
 
+// --- INJECT INTO CHILD CREATION ---
 async function handleCreateChild() {
   const newChild = {
     action: "createChild",
+    fingerprint: deviceFingerprint.value, // Pass validation tag
     id: 'c_' + Date.now(),
     name: childForm.value.name,
     startAmount: Number(childForm.value.startAmount) || 0,
@@ -535,27 +565,30 @@ async function handleCreateChild() {
   };
   
   isLoading.value = true;
-  children.value.push(newChild); // optimistic update
-  
-  await fetch(SHEET_API_URL, {
+  const res = await fetch(SHEET_API_URL, {
     method: "POST",
-    redirect: "follow",
     body: JSON.stringify(newChild)
   });
   
-  childForm.value = { name: '', startAmount: 0, weeklyAllowance: 0 };
+  const statusCheck = await res.json();
+  if (statusCheck.status === 'denied') {
+    alert(statusCheck.message);
+  } else {
+    childForm.value = { name: '', startAmount: 0, weeklyAllowance: 0 };
+  }
+  
   await fetchSyncDatabase();
   currentScreen.value = 'dashboard';
 }
-
 async function handleCreateTransaction() {
   if (txForm.value.type === 'withdrawal' && txForm.value.amount > 200) {
-    alert("Transaction Aborted: Individual item expenditures cannot exceed £200.00.");
+    alert("Transaction Aborted: Expenditures cannot exceed £200.00.");
     return;
   }
   
   const newTx = {
     action: "createTransaction",
+    fingerprint: deviceFingerprint.value, // Pass validation tag
     id: 'tx_' + Date.now(),
     childId: String(selectedChildId.value),
     date: txForm.value.date,
@@ -567,24 +600,24 @@ async function handleCreateTransaction() {
   };
   
   isLoading.value = true;
-  await fetch(SHEET_API_URL, {
+  const res = await fetch(SHEET_API_URL, {
     method: "POST",
-    redirect: "follow",
     body: JSON.stringify(newTx)
   });
+  
+  const statusCheck = await res.json();
+  if (statusCheck.status === 'denied') {
+    alert(statusCheck.message);
+  }
   
   txForm.value = { date: txForm.value.date, what: '', where: '', type: 'withdrawal', amount: null };
   await fetchSyncDatabase();
 }
 
 async function saveInlineEdit(txId) {
-  if (editForm.value.type === 'withdrawal' && editForm.value.amount > 200) {
-    alert("Prohibited action: Individual withdrawal thresholds are capped at £200.00.");
-    return;
-  }
-  
   const payload = {
     action: "editTransaction",
+    fingerprint: deviceFingerprint.value, // Pass validation tag
     id: txId,
     date: editForm.value.date,
     what: editForm.value.what,
@@ -597,30 +630,37 @@ async function saveInlineEdit(txId) {
   isLoading.value = true;
   editingTxId.value = null;
   
-  await fetch(SHEET_API_URL, {
+  const res = await fetch(SHEET_API_URL, {
     method: "POST",
-    redirect: "follow",
     body: JSON.stringify(payload)
   });
+  
+  const statusCheck = await res.json();
+  if (statusCheck.status === 'denied') alert(statusCheck.message);
   
   await fetchSyncDatabase();
 }
 
 async function handleDeleteLastTransaction(txId) {
-  if (confirm("Delete the last logged transaction from history?")) {
+  if (confirm("Delete the last logged transaction?")) {
     isLoading.value = true;
     editingTxId.value = null;
     
-    await fetch(SHEET_API_URL, {
+    const res = await fetch(SHEET_API_URL, {
       method: "POST",
-      redirect: "follow",
-      body: JSON.stringify({ action: "deleteTransaction", id: txId })
+      body: JSON.stringify({ 
+        action: "deleteTransaction", 
+        id: txId,
+        fingerprint: deviceFingerprint.value // Pass validation tag
+      })
     });
+    
+    const statusCheck = await res.json();
+    if (statusCheck.status === 'denied') alert(statusCheck.message);
     
     await fetchSyncDatabase();
   }
 }
-
 function handleDeleteChild(id) {
   if (confirm("Are you sure you want to completely remove this child account?")) {
     children.value = children.value.filter(c => c.id !== id);
@@ -875,6 +915,54 @@ input, select { padding: 10px; border: 1px solid var(--border-color); border-rad
 div.hide-on-mobile { display: block !important; }
 .desktop-filter-container.hide-on-mobile { display: block !important; }
 
+
+.auth-warning-card {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+.auth-warning-card h4 {
+  color: #c2410c;
+  margin: 0 0 8px 0;
+}
+.auth-warning-card p {
+  color: #7c2d12;
+  font-size: 0.9rem;
+  margin: 0 0 12px 0;
+}
+.fingerprint-badge {
+  display: inline-block;
+  background: #ffedd5;
+  border: 1px solid #fdba74;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-weight: bold;
+  color: #9a3412;
+}
+
+  .input-with-btn-layout {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.input-with-btn-layout input {
+  flex: 1;
+  min-width: 0; /* Prevents input blowout in small flex cells */
+}
+.btn-assist {
+  background: #f1f5f9;
+  border: 1px solid var(--border-color);
+  padding: 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background 0.2s ease;
+}
+.btn-assist:hover {
+  background: #e2e8f0;
+}
 /* --- TWO-ROW-PER-TRANSACTION MOBILE LAYOUT RULES --- */
 @media (max-width: 600px) {
   .hide-on-mobile { display: none !important; }
@@ -942,26 +1030,6 @@ div.hide-on-mobile { display: block !important; }
   .btn-delete-inline-mobile { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; border-radius: 6px; font-weight: bold; cursor: pointer; }
   .btn-save-inline { border-radius: 6px; }
   .btn-cancel-inline { border-radius: 6px; }
-  .input-with-btn-layout {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.input-with-btn-layout input {
-  flex: 1;
-  min-width: 0; /* Prevents input blowout in small flex cells */
-}
-.btn-assist {
-  background: #f1f5f9;
-  border: 1px solid var(--border-color);
-  padding: 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 1rem;
-  transition: background 0.2s ease;
-}
-.btn-assist:hover {
-  background: #e2e8f0;
-}
+
 }
 </style>
