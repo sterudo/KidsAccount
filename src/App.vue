@@ -1,343 +1,328 @@
 <template>
-<div v-if="isLoading" class="wait-scrim-overlay">
+  <div v-if="isLoading" class="wait-scrim-overlay">
     <div class="scrim-spinner-box">
       <div class="scrim-spinner"></div>
-      <p>Syncing Cloud Ledger...</p>
+      <p>Refreshing...</p>
     </div>
   </div>
 
-    <h1 class="app-title"> <button style="float:left;"
-          v-if="currentScreen === 'ledger'" 
-          @click="backToDashboard" 
-          class="btn btn-back-nav"
-        >
-          ⬅ Back
-        </button> Kids Accounts  v1.3</h1>
-  <div id="app">
-   <div v-if="isDeviceUnauthorized" class="card auth-warning-card">
-    <h4>🔒 Authorizing this device ... please wait</h4>
-    <p>If this message persists, please add this device's fingerprint ID to your <code>authorized_devices</code> spreadsheet tab:</p>
-    <div class="fingerprint-badge">
-      <code>{{ deviceFingerprint }}</code>
-    </div>
-    </div>
-    <div v-else>
-    <!-- GLOBAL TOP NAV BAR -->
-    <header class="app-header">
-    
-      <div class="nav-and-back-group">
-        <!-- Back button dynamically placed to the left of Dashboard when on ledger screen                
-        <button @click="currentScreen = 'dashboard'" class="btn" :class="currentScreen === 'dashboard' ? 'btn-primary' : 'btn-secondary'">Dashboard</button>
-        -->
-        <button @click="currentScreen = 'addChildSettings'" class="dbb btn" :class="currentScreen === 'addChildSettings' ? 'btn-primary' : 'btn-secondary'">+ Add Child</button>
-        <button @click="currentScreen = 'addUserSettings'" class="dbb btn" :class="currentScreen === 'addUserSettings' ? 'btn-primary' : 'btn-secondary'">+ Add User</button>
-      </div>
-      
-      <div class="user-selector-and-refresh-group">
-        <button type="button" @click="fetchSyncDatabase" class="btn btn-refresh-sync" title="Sync Cloud Data" :disabled="isLoading">
-          {{ isLoading ? '⏳' : '🔄 Refresh' }}
-        </button>
+  <h1 class="app-title"> 
+    <button style="float:left;" v-if="currentScreen !== 'dashboard'" @click="backToDashboard"  class="btn btn-back-nav">⬅ Back</button> 
+    Kids Accounts  v1.5
+  </h1>
 
-        <div class="user-selector">
-          <label for="global-user">User:</label>
-          <select id="global-user" v-model="currentUser" @change="saveUserPreference" style="padding:3px !important;color:silver;">
-            <option v-for="user in users" :key="user" :value="user">{{ user }}</option>
-          </select>
-        </div>
+  <div id="app">
+    <div v-if="isDeviceUnauthorized" class="card auth-warning-card">
+      <h4>🔒 Authorizing this device ... please wait</h4>
+      <p>If this message persists, please add this device's fingerprint ID to your <code>authorized_devices</code> spreadsheet tab:</p>
+      <div class="fingerprint-badge">
+        <code>{{ deviceFingerprint }}</code>
       </div>
-       <div  v-if="currentScreen === 'ledger' && selectedChild"  class="ledger-header">
-          <div class="child-summary">
-             <img :src="(selectedChild.name == 'Eve') ? 'eve250.png' : 'jason250.png'" width="60" height="60" class="rowimg"/>
-                <div style="padding:8px;border-top: 2px solid black; display: grid;
-  grid-template-columns: 1fr min-content min-content min-content;
-  gap: 8px; padding-bottom: 5px !important;  "
-   :style="(selectedChild.name == 'Eve') ? ' border-bottom: 2px solid #ff4ca5 !important;' : 'border-bottom: 2px solid #01a4ad !important;'"
-  class="balance-badge" :class="calculateBalance(selectedChild.id) >= 0 ? 'pos-dark-dark' : 'neg-dark-dark'">
+    </div>
+
+    <div v-else>
+      <!-- GLOBAL TOP NAV BAR -->
+      <header class="app-header">
+    
+        <div class="nav-and-back-group">
+          <button @click="currentScreen = 'addChildSettings'" class="dbb btn" :class="currentScreen === 'addChildSettings' ? 'btn-primary' : 'btn-secondary'">+ Add Child</button>
+          <button @click="currentScreen = 'addUserSettings'" class="dbb btn" :class="currentScreen === 'addUserSettings' ? 'btn-primary' : 'btn-secondary'">+ Add User</button>
+        </div>
+      
+        <div class="user-selector-and-refresh-group">
+          <button type="button" @click="fetchSyncDatabase" class="btn btn-refresh-sync" title="Sync Cloud Data" :disabled="isLoading">
+            {{ isLoading ? '⏳' : '🔄 Refresh' }}
+          </button>
+
+          <div class="user-selector">
+            <label for="global-user">User:</label>
+            <select id="global-user" v-model="currentUser" @change="saveUserPreference" style="padding:3px !important;color:silver;">
+              <option v-for="user in users" :key="user" :value="user">{{ user }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div  v-if="currentScreen === 'ledger' && selectedChild"  class="ledger-header">
+            <div class="child-summary">
+                <img :src="(selectedChild.name == 'Eve') ? 'eve250.png' : 'jason250.png'" width="60" height="60" class="rowimg"/>
+                <div 
+                  :style="(selectedChild.name == 'Eve') ? ' border-bottom: 2px solid #ff4ca5 !important;' : 'border-bottom: 2px solid #01a4ad !important;'"
+                    class="balance-badge" :class="calculateBalance(selectedChild.id) >= 0 ? 'pos-dark-dark' : 'neg-dark-dark'">
                   
                   <span class="childsName"  :class="(selectedChild.name == 'Eve') ? 'girl': 'boy-dark'">{{ selectedChild.name }}</span>           
                   <span class="balancelabel">Balance</span>
                   <span class="currency" style="font-size:32px;  "> £</span>              
-                     <strong style="font-size:32px;text-shadow: white -1px -1px 1px, black 1px 1px 2px;">{{ calculateBalance(selectedChild.id).toFixed(2) }}</strong>
+                  <strong style="font-size:32px;text-shadow: white -1px -1px 1px, black 1px 1px 2px;">{{ calculateBalance(selectedChild.id).toFixed(2) }}</strong>
                 </div>    
-          </div>  
+            </div>  
         </div>
 
-    </header>
+       </header>
 
-    <main class="app-container">
+      <main class="app-container">
 
-      <div v-if="isLoading" class="loading-overlay-indicator">
-      🔄 Processing & Syncing Spreadsheet Cloud Database Engine...
-    </div>
+        <div v-if="isLoading" class="loading-overlay-indicator">
+        🔄 Processing & Syncing Spreadsheet Cloud Database Engine...
+        </div>
       
-      <!-- VIEW 1: ADD CHILD SCREEN -->
-      <section v-if="currentScreen === 'addChildSettings'" class="screen single-column-screen">
-        <div class="card structural-form">
-          <h2>Create New Child Account</h2>
-          <form @submit.prevent="handleCreateChild">
-            <div class="form-vertical-group">
-              <label for="new-name">Child's Name</label>
-              <input id="new-name" v-model="childForm.name" type="text" placeholder="e.g. Liam" required />
-            </div>
-            <div class="form-vertical-group">
-              <label for="new-start">Starting Balance (£)</label>
-              <input id="new-start" v-model.number="childForm.startAmount" type="number" step="0.01" min="0" />
-            </div>
-            <div class="form-vertical-group">
-              <label for="new-allowance">Weekly Allowance Amount (£)</label>
-              <input id="new-allowance" v-model.number="childForm.weeklyAllowance" type="number" step="0.01" min="0" />
-            </div>
-            <button type="submit" class="btn btn-success block-btn">Save Child Account</button>
-          </form>
-        </div>
-      </section>
-
-      <!-- VIEW 2: ADD USER SCREEN -->
-      <section v-if="currentScreen === 'addUserSettings'" class="screen single-column-screen">
-        <div class="card structural-form">
-          <h2>Add Authorized Parent/User</h2>
-          <form @submit.prevent="handleCreateUser">
-            <div class="form-vertical-group">
-              <label for="new-user-name">Parent Name</label>
-              <input id="new-user-name" v-model="newUserFormName" type="text" placeholder="e.g. Mum" required />
-            </div>
-            <button type="submit" class="btn btn-success block-btn">Register User</button>
-          </form>
-          
-          <div class="user-list-display">
-            <h3>Registered Users</h3>
-            <ul class="deletable-list">
-              <li v-for="user in users" :key="user">
-                <span>{{ user }}</span>
-                <button v-if="isUserDeletable(user)" @click="handleDeleteUser(user)" class="btn-delete-small" title="Delete User">Delete</button>
-              </li>
-            </ul>
+        <!-- VIEW 1: ADD CHILD SCREEN -->
+        <section v-if="currentScreen === 'addChildSettings'" class="screen single-column-screen">
+          <div class="card structural-form">
+            <h2>Create New Child Account</h2>
+            <form @submit.prevent="handleCreateChild">
+              <div class="form-vertical-group">
+                <label for="new-name">Child's Name</label>
+                <input id="new-name" v-model="childForm.name" type="text" placeholder="e.g. Liam" required />
+              </div>
+              <div class="form-vertical-group">
+                <label for="new-start">Starting Balance (£)</label>
+                <input id="new-start" v-model.number="childForm.startAmount" type="number" step="0.01" min="0" />
+              </div>
+              <div class="form-vertical-group">
+                <label for="new-allowance">Weekly Allowance Amount (£)</label>
+                <input id="new-allowance" v-model.number="childForm.weeklyAllowance" type="number" step="0.01" min="0" />
+              </div>
+              <button type="submit" class="btn btn-success block-btn">Save Child Account</button>
+            </form>
           </div>
-        </div>
-      </section>
+        </section>
 
-
-
-      <!-- VIEW 3: DASHBOARD (One Kid Per Row Layout) -->
-      <section v-if="currentScreen === 'dashboard'" class="screen" style="margin-top: 20px;">
-        <div class="card list-card">
-          <h2>Children's Accounts</h2>
-          <p v-if="children.length === 0" class="empty-state">No accounts created yet. Use the "+ Add Child" tab above.</p>
-          
-          <div v-else class="dashboard-rows-container">
-            <div v-for="child in children" :key="child.id" class="child-row-layout">
-              <div class="child-row-click-area" @click="navigateToLedger(child.id)">
-                <img :src="(child.name == 'Eve') ? 'eve250.png' : 'jason250.png'" class="child-avatar" width="60" height="60" style="flex-basis:1;margin-right:10px;" />
-                <div class="child-row-info" style="flex-basis: 100%;  text-align: left;">
-                  
-                  <h3 :class="(child.name == 'Eve') ? 'girl': 'boy'">{{ child.name }} </h3>
-                  <span class="allowance-label" style="text-align:left;"><span style="font-size: 12px;" class="allowance-label-text">Allowance:</span> {{ formatCurrency(child.weeklyAllowance) }}/wk</span>
-                </div>
-                <div class="child-row-balance" :class="calculateBalance(child.id) >= 0 ? 'pos-dark-dark' : 'neg-dark-dark'">
-                  {{ formatCurrency(calculateBalance(child.id)) }}
-                </div>
+        <!-- VIEW 2: ADD USER SCREEN -->
+        <section v-if="currentScreen === 'addUserSettings'" class="screen single-column-screen">
+          <div class="card structural-form">
+            <h2>Add Authorized Parent/User</h2>
+            <form @submit.prevent="handleCreateUser">
+              <div class="form-vertical-group">
+                <label for="new-user-name">Parent Name</label>
+                <input id="new-user-name" v-model="newUserFormName" type="text" placeholder="e.g. Mum" required />
               </div>
-             <div class="child-row-actions" v-if="currentUser === 'Dad'">
-              <button 
-                v-if="isChildDeletable(child.id)" 
-                @click="handleDeleteChild(child.id)" 
-                class="btn-delete-row" 
-                title="Delete Child Account"
-              >
-                Delete Account
-              </button>
-            </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- VIEW 4: LEDGER / STATEMENT DETAILED VIEW -->
-      <section v-if="currentScreen === 'ledger' && selectedChild" class="screen">
-       
-        <!-- Transaction Input Form -->
-        <div class="card form-card">
-          <h3>Log New Transaction</h3>
-          <form @submit.prevent="handleCreateTransaction" class="inline-form">
-            <div class="form-group">
-              <label>Date</label>
-              <input v-model="txForm.date" type="date" required style="width: 120px"/>
-            </div>
-
-               <div class="form-group">
-              <label>Type</label>
-              <select v-model="txForm.type" style="max-width:150px;">
-                <option value="withdrawal">Withdrawal (-)</option>
-                <option value="deposit">Deposit (+)</option>
-              </select>
-            </div>
-                        
-            <div class="form-group relative-position" style="grid-column: 1 / 3">
-              <label>What (Description)</label>
-              <div class="input-with-btn-layout">
-                <input 
-                  v-model="txForm.what" 
-                  type="text" 
-                  placeholder="e.g. Ice cream" 
-                  required 
-                  @focus="activeHelper = 'what'"
-                  @blur="closeHelperDeferred" 
-                />
-                <button type="button" @click.prevent.stop="activeHelper = 'what'" class="btn btn-assist" title="Show past descriptions">✨</button>
-              </div>
-              <div v-if="activeHelper === 'what' && dynamicSuggestionsWhat.length > 0" class="helper-dropdown">
-                <ul>
-                  <li v-for="item in dynamicSuggestionsWhat" :key="item" @mousedown.prevent="selectHelper('what', item)">{{ item }}</li>
-                </ul>
-              </div>
-            </div>
-
-            <div class="form-group relative-position" style="grid-column: 1 / 3">
-              <label>Where (Optional)</label>
-              <div class="input-with-btn-layout">
-                <input 
-                  v-model="txForm.where" 
-                  type="text" 
-                  placeholder="e.g. Corner Shop" 
-                  @focus="activeHelper = 'where'"
-                  @blur="closeHelperDeferred" 
-                />
-                <button type="button" @click.prevent.stop="activeHelper = 'where'" class="btn btn-assist" title="Show past locations">✨</button>
-              </div>
-              <div v-if="activeHelper === 'where' && dynamicSuggestionsWhere.length > 0" class="helper-dropdown">
-                <ul>
-                  <li v-for="item in dynamicSuggestionsWhere" :key="item" @mousedown.prevent="selectHelper('where', item)">{{ item }}</li>
-                </ul>
-              </div>
-            </div>
-
-         
-            <div class="form-group">
-              <label>Amount (£)</label>
-              <input v-model.number="txForm.amount" style="font-size:32px;height:55px;box-sizing: border-box;" type="number" step="0.01" min="0.01" required />
-            </div>
-            <button type="submit " class="btn btn-primary log-submit-btn  " :class="{ 'Deposit': txForm.type === 'deposit', 'Withdraw': txForm.type === 'withdrawal' }"
-            style="font-size:24px;height:55px;box-sizing: border-box;display: flex !important;  place-content: center;  text-shadow: 1px 1px 3px black;" >{{ txForm.type === 'deposit' ? 'Deposit'  : 'Withdraw' }}</button>
-          </form>
-        </div>
-
-        <!-- Filter & History Container -->
-        <div class="card list-card">
-          
-          <!-- DESKTOP FILTER ONLY (Hidden completely on mobile viewports) -->
-          <div class="desktop-filter-container hide-on-mobile">
-            <div class="filter-header-row">
-              <h3>Transaction History</h3>
-              <button @click="showMetaFields = !showMetaFields" class="btn btn-tiny">
-                {{ showMetaFields ? 'Hide Audit Columns' : 'Expand Audit Columns' }}
-              </button>
-            </div>
+              <button type="submit" class="btn btn-success block-btn">Register User</button>
+            </form>
             
-            <div class="search-filter-grid">
-              <div class="form-group">
-                <label>Text Search</label>
-                <input v-model="filterText" type="text" placeholder="Search..." />
+            <div class="user-list-display">
+              <h3>Registered Users</h3>
+              <ul class="deletable-list">
+                <li v-for="user in users" :key="user">
+                  <span>{{ user }}</span>
+                  <button v-if="isUserDeletable(user)" @click="handleDeleteUser(user)" class="btn-delete-small" title="Delete User">Delete</button>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 3: DASHBOARD (One Kid Per Row Layout) -->
+        <section v-if="currentScreen === 'dashboard'" class="screen" style="margin-top: 20px;">
+          <div class="card list-card">
+            <h2>Children's Accounts</h2>
+            <p v-if="children.length === 0" class="empty-state">No accounts created yet. Use the "+ Add Child" tab above.</p>
+            
+            <div v-else class="dashboard-rows-container">
+              <div v-for="child in children" :key="child.id" class="child-row-layout">
+                <div class="child-row-click-area" @click="navigateToLedger(child.id)">
+                 
+                  <img :src="(child.name == 'Eve') ? 'eve250.png' : 'jason250.png'" class="child-avatar" width="60" height="60" style="flex-basis:1;margin-right:10px;" />
+                  <div class="child-row-info" style="flex-basis: 100%;  text-align: left;">                    
+                    <h3 :class="(child.name == 'Eve') ? 'girl': 'boy'">{{ child.name }} </h3>
+                    <span class="allowance-label" style="text-align:left;"><span style="font-size: 12px;" class="allowance-label-text">Allowance:</span> {{ formatCurrency(child.weeklyAllowance) }}/wk</span>
+                  </div>
+                  <div class="child-row-balance" :class="calculateBalance(child.id) >= 0 ? 'pos-dark-dark' : 'neg-dark-dark'">
+                    {{ formatCurrency(calculateBalance(child.id)) }}
+                  </div>
+                </div>
+                <div class="child-row-actions" v-if="currentUser === 'Dad'">
+                  <button 
+                    v-if="isChildDeletable(child.id)" 
+                    @click="handleDeleteChild(child.id)" 
+                    class="btn-delete-row" 
+                    title="Delete Child Account">Delete</button>
+                </div>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 4: LEDGER / STATEMENT DETAILED VIEW -->
+        <section v-if="currentScreen === 'ledger' && selectedChild" class="screen">
+       
+          <!-- Transaction Input Form -->
+          <div class="card form-card">
+            <h3>Log New Transaction</h3>
+            <form @submit.prevent="handleCreateTransaction" class="inline-form">
               <div class="form-group">
-                <label>Start Date</label>
-                <input v-model="filterStartDate" type="date" />
+                <label for="tx-date">Date</label>
+                <input id="tx-date" v-model="txForm.date" type="date" required style="width: 120px"/>
               </div>
+
               <div class="form-group">
-                <label>End Date</label>
-                <input v-model="filterEndDate" type="date" />
-              </div>
-              <div class="form-group">
-                <label>Type</label>
-                <select v-model="filterType">
-                  <option value="all">All</option>
-                  <option value="withdrawal">Withdrawals</option>
-                  <option value="deposit">Deposits</option>
+                <label for="tx-type">Type</label>
+                <select id="tx-type" v-model="txForm.type" style="max-width:150px;">
+                  <option value="withdrawal">Withdrawal (-)</option>
+                  <option value="deposit">Deposit (+)</option>
                 </select>
               </div>
-            </div>
-          </div>
-
-          <!-- DESKTOP VIEW CONTAINER (Strictly hidden on mobile widths) -->
-          <div class="desktop-ledger-view-wrapper hide-on-mobile">
-            <div class="desktop-grid-header" :class="{ 'with-meta': showMetaFields }">
-              <div  class="text-left">Date</div>
-              <div class="text-left">Description</div>
-              <div class="text-left where">Where</div>
-              <div class="text-right">Amount</div>
-              <template v-if="showMetaFields">
-                <div class="text-left">Recorded By</div>
-                <div class="text-left">Fingerprint</div>
-                <div class="text-left">Timestamp</div>
-              </template>
-            </div>
-
-            <div class="desktop-grid-body">
-                 <div v-if="editingTxId" class="desktop-inline-edit-actions">
-                <span>⚠️ Review numbers.</span>
-                <div class="action-buttons-group">
-                  <button @click="saveInlineEdit(editingTxId)" class="btn-save-inline"  style="padding:4px 10px; font-size:0.85rem;border: 2px solid green;">Save</button>
-                  <button @click="cancelInlineEdit" class="btn-cancel-inline"  style="padding:4px 10px; font-size:0.85rem;border: 2px solid gray;">Cancel</button>
-                  <button @click="handleDeleteLastTransaction(editingTxId)" class="btn-delete-row" style="padding:4px 10px; font-size:0.85rem;">Delete Entirely</button>
+                        
+              <div class="form-group relative-position" style="grid-column: 1 / 3">
+                <label for="tx-what">What (Description)</label>
+                <div class="input-with-btn-layout">
+                  <input 
+                    v-model="txForm.what" 
+                    type="text" 
+                    placeholder="e.g. Ice cream" 
+                    required 
+                    @focus="activeHelper = 'what'"
+                    @blur="closeHelperDeferred"   />
+                  <button type="button" @click.prevent.stop="activeHelper = 'what'" class="btn btn-assist" title="Show past descriptions">✨</button>
+                </div>
+                <div v-if="activeHelper === 'what' && dynamicSuggestionsWhat.length > 0" class="helper-dropdown">
+                  <ul>
+                    <li v-for="item in dynamicSuggestionsWhat" :key="item" @mousedown.prevent="selectHelper('what', item)">{{ item }}</li>
+                  </ul>
                 </div>
               </div>
+
+              <div class="form-group relative-position" style="grid-column: 1 / 3">
+                <label for="tx-where">Where (Optional)</label>
+                <div class="input-with-btn-layout">
+                  <input 
+                    id="tx-where"
+                    v-model="txForm.where" 
+                    type="text" 
+                    placeholder="e.g. Corner Shop" 
+                    @focus="activeHelper = 'where'"
+                    @blur="closeHelperDeferred"  />
+                  <button type="button" @click.prevent.stop="activeHelper = 'where'" class="btn btn-assist" title="Show past locations">✨</button>
+                </div>
+                <div v-if="activeHelper === 'where' && dynamicSuggestionsWhere.length > 0" class="helper-dropdown">
+                  <ul>
+                    <li v-for="item in dynamicSuggestionsWhere" :key="item" @mousedown.prevent="selectHelper('where', item)">{{ item }}</li>
+                  </ul>
+                </div>
+              </div>
+
+         
+              <div class="form-group">
+                <label for="tx-amount">Amount (£)</label>
+                <input id="tx-amount" v-model.number="txForm.amount" style="font-size:32px;height:55px;box-sizing: border-box;" type="number" step="0.01" min="0.01" required />
+              </div>
+              <button type="submit " class="btn btn-primary log-submit-btn  " :class="{ 'Deposit': txForm.type === 'deposit', 'Withdraw': txForm.type === 'withdrawal' }"
+              style="font-size:24px;height:55px;box-sizing: border-box;display: flex !important;  place-content: center;  text-shadow: 1px 1px 3px black;" >{{ txForm.type === 'deposit' ? 'Deposit'  : 'Withdraw' }}</button>
+            </form>
+          </div>
+
+          <!-- Filter & History Container -->
+          <div class="card list-card">
+          
+            <!-- DESKTOP FILTER ONLY (Hidden completely on mobile viewports) -->
+            <div class="desktop-filter-container hide-on-mobile">
+              <div class="filter-header-row">
+                <h3>Transaction History</h3>
+                <button @click="showMetaFields = !showMetaFields" class="btn btn-tiny">
+                  {{ showMetaFields ? 'Hide Audit Columns' : 'Expand Audit Columns' }}
+                </button>
+              </div>
+            
+              <div class="search-filter-grid">
+                <div class="form-group">
+                  <label for="filter-text">Text Search</label>
+                  <input id="filter-text" v-model="filterText" type="text" placeholder="Search..." />
+                </div>
+                <div class="form-group">
+                  <label for="filter-start-date">Start Date</label>
+                  <input id="filter-start-date" v-model="filterStartDate" type="date" />
+                </div>
+                <div class="form-group">
+                  <label for="filter-end-date">End Date</label>
+                  <input id="filter-end-date" v-model="filterEndDate" type="date" />
+                </div>
+                <div class="form-group">
+                  <label for="filter-type">Type</label>
+                  <select id="filter-type" v-model="filterType">
+                    <option value="all">All</option>
+                    <option value="withdrawal">Withdrawals</option>
+                    <option value="deposit">Deposits</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- DESKTOP VIEW CONTAINER (Strictly hidden on mobile widths) -->
+            <div class="desktop-ledger-view-wrapper hide-on-mobile">
+              <div class="desktop-grid-header" :class="{ 'with-meta': showMetaFields }">
+                <div  class="text-left">Date</div>
+                <div class="text-left">Description</div>
+                <div class="text-left where">Where</div>
+                <div class="text-right">Amount</div>
+                <template v-if="showMetaFields">
+                  <div class="text-left">Recorded By</div>
+                  <div class="text-left">Fingerprint</div>
+                  <div class="text-left">Timestamp</div>
+                </template>
+              </div>
+
+              <div class="desktop-grid-body">
+                <div v-if="editingTxId" class="desktop-inline-edit-actions">
+                  <span>⚠️ Review numbers.</span>
+                  <div class="action-buttons-group">
+                    <button @click="saveInlineEdit(editingTxId)" class="btn-save-inline"  style="padding:4px 10px; font-size:0.85rem;border: 2px solid green;">Save</button>
+                    <button @click="cancelInlineEdit" class="btn-cancel-inline"  style="padding:4px 10px; font-size:0.85rem;border: 2px solid gray;">Cancel</button>
+                    <button @click="handleDeleteLastTransaction(editingTxId)" class="btn-delete-row" style="padding:4px 10px; font-size:0.85rem;">Delete Entirely</button>
+                  </div>
+                </div>
            
               <!-- Inline transaction list -->
-              <div 
-                v-for="tx in filteredTransactions" 
-                :key="tx.id" 
-                class="desktop-grid-row"
-                :class="{ 
-                  'editing-row': editingTxId === tx.id, 
-                  'clickable-last-row': isLastTransaction(tx.id) 
-                }"
-                :style="showMetaFields ? 'grid-template-columns:100px 1fr 1fr 90px 130px 120px 120px' : 'grid-template-columns: 100px 1fr 1fr 90px'"
-                @click="handleRowClick(tx)"
-              >
-               <!-- Pinned Save Action Bar for desktop rows editing state controls -->
-           
-                <!-- Row display logic / Form fields toggle during row selections -->
-                <template v-if="editingTxId !== tx.id">
-                  <div class="text-left">{{ formatDate(tx.date) }}</div>
-                  <div class="text-left">{{ tx.what }}</div>
-                   <div class="text-left where">{{ tx.where || '-' }}</div>
-                  <div class="text-right" :class="tx.type === 'deposit' ? 'pos-dark-text' : 'neg-text'">
-                    {{ tx.type === 'deposit' ? '+' : '-' }}{{ formatCurrency(tx.amount) }}
-                  </div>
-                  <template v-if="showMetaFields">
-                    <div class="meta-cell text-left ">{{ tx.recordedBy }}</div>
-                    <div class="meta-cell mono text-left">{{ tx.deviceFingerprint }}</div>
-                    <div class="meta-cell mono text-left">{{ formatTimestamp(tx.utcTimestamp) }}</div>
+                <div 
+                  v-for="tx in filteredTransactions" 
+                  :key="tx.id" 
+                  class="desktop-grid-row"
+                  :class="{ 
+                    'editing-row': editingTxId === tx.id, 
+                    'clickable-last-row': isLastTransaction(tx.id) 
+                  }"
+                  :style="showMetaFields ? 'grid-template-columns:100px 1fr 1fr 90px 130px 120px 120px' : 'grid-template-columns: 100px 1fr 1fr 90px'"
+                  @click="handleRowClick(tx)" >
+                  <!-- Pinned Save Action Bar for desktop rows editing state controls -->
+            
+                  <!-- Row display logic / Form fields toggle during row selections -->
+                  <template v-if="editingTxId !== tx.id">
+                    <div class="text-left">{{ formatDate(tx.date) }}</div>
+                    <div class="text-left">{{ tx.what }}</div>
+                    <div class="text-left where">{{ tx.where || '-' }}</div>
+                    <div class="text-right" :class="tx.type === 'deposit' ? 'pos-dark-text' : 'neg-text'">
+                      {{ tx.type === 'deposit' ? '+' : '-' }}{{ formatCurrency(tx.amount) }}
+                    </div>
+                    <template v-if="showMetaFields">
+                      <div class="meta-cell text-left ">{{ tx.recordedBy }}</div>
+                      <div class="meta-cell mono text-left">{{ tx.deviceFingerprint }}</div>
+                      <div class="meta-cell mono text-left">{{ formatTimestamp(tx.utcTimestamp) }}</div>
+                    </template>
                   </template>
-                </template>
 
-                <template v-else>
-                  <label>Date</label>
-                  <label>Desciption</label>
-                  <label>Where</label>
-                  <label>Amount (£)</label>
-                  <div @click.stop><input v-model="editForm.date" type="date" class="table-input" /></div>
-                  <div @click.stop><input v-model="editForm.what" type="text" class="table-input" /></div>
-                  <div @click.stop ><input v-model="editForm.where" type="text" class="table-input" /></div>
-                  <div @click.stop class="table-amount-edit-wrap">
-                    <select v-model="editForm.type" class="table-select">
-                      <option value="withdrawal">(-)</option>
-                      <option value="deposit">(+)</option>
-                    </select>
-                    <input v-model.number="editForm.amount" type="number" step="0.01" class="table-input amount-input-box" />
-                  </div>
-                  <template v-if="showMetaFields">
-                    <div class="meta-cell">-</div><div class="meta-cell">-</div><div class="meta-cell">-</div>
+                  <template v-else>
+                    <label>Date</label>
+                    <label>Desciption</label>
+                    <label>Where</label>
+                    <label>Amount (£)</label>
+                    <div @click.stop><input v-model="editForm.date" type="date" class="table-input" /></div>
+                    <div @click.stop><input v-model="editForm.what" type="text" class="table-input" /></div>
+                    <div @click.stop ><input v-model="editForm.where" type="text" class="table-input" /></div>
+                    <div @click.stop class="table-amount-edit-wrap" style="justify-content: flex-start;">
+                      <select v-model="editForm.type" class="table-select">
+                        <option value="withdrawal">(-)</option>
+                        <option value="deposit">(+)</option>
+                      </select>
+                      <input v-model.number="editForm.amount" type="number" step="0.01" class="table-input amount-input-box" />
+                    </div>
+                    <template v-if="showMetaFields">
+                      <div class="meta-cell">-</div><div class="meta-cell">-</div><div class="meta-cell">-</div>
+                    </template>
                   </template>
-                </template>
-             </div>
-
-             
+              </div>
 
               <!-- Pin Starting Balance cleanly to the absolute bottom of the list -->
               <div 
                 class="desktop-grid-row initial-balance-row"
-                :style="showMetaFields ? 'grid-template-columns:100px 1fr 1fr 90px 130px 120px 120px' : 'grid-template-columns: 100px 1fr 1fr 90px'"
-              >
+                :style="showMetaFields ? 'grid-template-columns:100px 1fr 1fr 90px 130px 120px 120px' : 'grid-template-columns: 100px 1fr 1fr 90px'" >
                 <div>-</div>
                 <div><strong>Starting Balance</strong></div>
                 <div class="where">-</div>
@@ -347,15 +332,15 @@
                 </template>
               </div>
             </div>
+            </div>
+
           </div>
+        </section>
+      </main>
 
-        
+    </div>
+  </div>
 
-        </div>
-      </section>
-    </main>
-  </div>
-  </div>
 </template>
 
 <script setup>
@@ -450,7 +435,7 @@ const authorizedDevices = ref([]);
 function backToDashboard() {
   selectedChildId.value = null;
   currentScreen.value = 'dashboard';
-  window.scrollTo(0,0)
+  window.scrollTo(0,0);
 }
 
 function formatTimestamp(tsStr) {
@@ -891,10 +876,11 @@ function formatDateMobile(dStr) {
   --text-muted: #94a3b8;     /* Soft grey-blue for secondary text or helper labels */
   --primary: #38bdf8;        /* Swapped dark 'navy' for a vibrant electric sky blue */
   --secondary: #334155;      /* Dark slate wrapper for subtle buttons/background tabs */
-   --success-dark:#25f578;
+   --success-dark:#048838;
   --danger-dark: #e44242;
   --border-color: #334155;   /* Subtle divider lines that split elements without being harsh */
 }
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -943,6 +929,7 @@ label {
 input, select {
   font-family: arial, sans-serif;
   padding: 6px !important;
+  background: #131216;
 }
 
 /* Screen-Blocking Wait Scrim */
@@ -1171,11 +1158,11 @@ background: #362a06 !important;
 .table-select { padding: 2px !important;
   font-size: 12px; border: 1px solid #eab308; border-radius: 4px; }
 .table-amount-edit-wrap { display: flex; gap: 4px; justify-content: flex-end; }
-.amount-input-box { width: 80px; }
+.amount-input-box { width: 45px; }
 
 .initial-balance-row { background: #040f06 !important; font-style: italic; color: var(--text-muted); }
 
-.search-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 12px; }
+.search-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 12px; margin-top: 12px; }
 .filter-header-row { display: flex; justify-content: space-between; align-items: center; }
 .btn-tiny { padding: 6px 12px; font-size: 0.8rem; background: #e2e8f0; color: #334155; }
 
@@ -1188,7 +1175,7 @@ background: #362a06 !important;
 .neg { color: var(--danger-dark); background-color: #f8d7da; font-weight: bold; }
 .pos-dark-dark { color: #71ffaa;  background-color: #184732;font-weight: bold; }
 .neg-dark-dark { color: #650000; background-color: #f8d7da; font-weight: bold; }
-.pos-dark-text { color: var(--success-dark); font-weight: bold; }
+.pos-dark-text { color: #71ffaa; font-weight: bold; }
 .neg-text { color: #ff4646; font-weight: bold; }
 
 .relative-position { position: relative; }
@@ -1310,10 +1297,16 @@ button.Withdraw {
   }
 
   .balance-badge {
-  padding-top: 2px !important;
-  padding-bottom: 2px !important;
-  margin-bottom: 2px;
-}
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+    margin-bottom: 2px;
+    padding:8px;
+    border-top: 2px solid black;
+    display: grid;
+    grid-template-columns: 1fr min-content min-content min-content; 
+    gap: 8px; 
+    padding-bottom: 5px !important;
+  }
 
 .filter-header-row {
   position: relative;
@@ -1454,6 +1447,11 @@ button.Withdraw {
 
   .desktop-grid-header, .desktop-grid-row{
     grid-template-columns: 100px 1fr 90px !important;
+  }
+
+  .desktop-grid-row.editing-row {
+
+  grid-template-columns: 100px 1fr 1fr 124px !important;
   }
 
   .desktop-grid-row * {
