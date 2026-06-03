@@ -12,7 +12,7 @@
           class="btn btn-back-nav"
         >
           ⬅ Back
-        </button> Kids Accounts  v1.2</h1>
+        </button> Kids Accounts  v1.3</h1>
   <div id="app">
    <div v-if="isDeviceUnauthorized" class="card auth-warning-card">
     <h4>🔒 Authorizing this device ... please wait</h4>
@@ -40,7 +40,7 @@
 
         <div class="user-selector">
           <label for="global-user">User:</label>
-          <select id="global-user" v-model="currentUser" @change="saveUserPreference">
+          <select id="global-user" v-model="currentUser" @change="saveUserPreference" style="padding:3px !important;color:silver;">
             <option v-for="user in users" :key="user" :value="user">{{ user }}</option>
           </select>
         </div>
@@ -50,7 +50,9 @@
              <img :src="(selectedChild.name == 'Eve') ? 'eve250.png' : 'jason250.png'" width="60" height="60" class="rowimg"/>
                 <div style="padding:8px;border-top: 2px solid black; display: grid;
   grid-template-columns: 1fr min-content min-content min-content;
-  gap: 8px;  border-bottom: 2px solid black;padding-bottom: 5px !important;  " class="balance-badge" :class="calculateBalance(selectedChild.id) >= 0 ? 'pos-dark-dark' : 'neg-dark-dark'">
+  gap: 8px; padding-bottom: 5px !important;  "
+   :style="(selectedChild.name == 'Eve') ? ' border-bottom: 2px solid #ff4ca5 !important;' : 'border-bottom: 2px solid #01a4ad !important;'"
+  class="balance-badge" :class="calculateBalance(selectedChild.id) >= 0 ? 'pos-dark-dark' : 'neg-dark-dark'">
                   
                   <span class="childsName"  :class="(selectedChild.name == 'Eve') ? 'girl': 'boy-dark'">{{ selectedChild.name }}</span>           
                   <span class="balancelabel">Balance</span>
@@ -126,10 +128,10 @@
             <div v-for="child in children" :key="child.id" class="child-row-layout">
               <div class="child-row-click-area" @click="navigateToLedger(child.id)">
                 <img :src="(child.name == 'Eve') ? 'eve250.png' : 'jason250.png'" class="child-avatar" width="60" height="60" style="flex-basis:1;margin-right:10px;" />
-                <div class="child-row-info">
+                <div class="child-row-info" style="flex-basis: 100%;  text-align: left;">
                   
                   <h3 :class="(child.name == 'Eve') ? 'girl': 'boy'">{{ child.name }} </h3>
-                  <span class="allowance-label" style="text-align:left;">Allowance: {{ formatCurrency(child.weeklyAllowance) }}/wk</span>
+                  <span class="allowance-label" style="text-align:left;"><span style="font-size: 12px;" class="allowance-label-text">Allowance:</span> {{ formatCurrency(child.weeklyAllowance) }}/wk</span>
                 </div>
                 <div class="child-row-balance" :class="calculateBalance(child.id) >= 0 ? 'pos-dark-dark' : 'neg-dark-dark'">
                   {{ formatCurrency(calculateBalance(child.id)) }}
@@ -1045,6 +1047,8 @@ margin-right: 32px;
   color: var(--primary) !important;
   transition: all 0.2s ease;
   padding: 4px !important;
+  font-size: 12px !important;
+  font-weight: normal !important;
 }
 .btn-back-nav:hover {
   background:var(--secondary);
@@ -1240,7 +1244,7 @@ div.hide-on-mobile { display: block !important; }
 .btn-assist {
   background: #304a63;
   border: 1px solid var(--border-color);
-  padding: 10px;
+  padding: 4px;
   border-radius: 6px;
   cursor: pointer;
   font-size: 1rem;
@@ -1267,7 +1271,7 @@ div.hide-on-mobile { display: block !important; }
   position: static;
 }
 .boy-dark {
-  color:#008188 !important;
+  color:#01a4ad !important ;
   position: static;
 }
 
@@ -1280,6 +1284,11 @@ button.Withdraw {
   background: var(--danger-dark) !important;
  
 }
+
+.form-card input, .form-card select {
+  box-shadow: 0px 0px 4px white;
+}
+  
 /* --- TWO-ROW-PER-TRANSACTION MOBILE LAYOUT RULES --- */
 @media (max-width: 600px) {
   .dbb {
@@ -1346,11 +1355,7 @@ button.Withdraw {
     top: 2px !important;
     color: silver;
   }
-  .form-group.relative-position label {
-    position: relative;
-    top: 10px !important;
-    color: silver;
-  }
+
   /* Mobile Stack List */
   .mobile-ledger-stack {
     display: flex;
@@ -1409,7 +1414,7 @@ button.Withdraw {
 }
 
 .btn-refresh-sync {
-  background: #1e293b;
+  background: var(--secondary);
   border: 1px solid var(--border-color);
   padding: 4px;
   font-size: 1rem;
@@ -1420,6 +1425,9 @@ button.Withdraw {
   align-items: center;
   justify-content: center;
   transition: background 0.2s ease;
+  border: 0px solid #17202d !important;
+  color: var(--primary);
+  font-size: 12px !important;
 }
 
 .btn-refresh-sync:hover:not(:disabled) {
@@ -1431,6 +1439,11 @@ button.Withdraw {
   cursor: not-allowed;
 }
 
+::placeholder {
+  font-style: italic;
+  font-size:12px;
+  color:gray;
+}
 .rowimg {
      position: absolute;
     top: 47px;
@@ -1438,10 +1451,21 @@ button.Withdraw {
 }
 /* Ensure mobile stacking rules do not distort header utilities button configurations */
 @media (max-width: 600px) {
+
+  .desktop-grid-header, .desktop-grid-row{
+    grid-template-columns: 100px 1fr 90px !important;
+  }
+
+  .desktop-grid-row * {
+    font-size: 12px !important;
+  }
+  .allowance-label-text {
+    display: none;
+  }
 .rowimg {
      position: absolute;
     top: 6px;
-    left: 110px; 
+    left: 100px; 
 }
   .nav-and-back-group {
     display:none;
