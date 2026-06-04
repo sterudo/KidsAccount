@@ -8,7 +8,7 @@
 
   <h1 class="app-title"> 
     <button style="float:left;" v-if="currentScreen !== 'dashboard'" @click="backToDashboard"  class="btn btn-back-nav">⬅ Back</button> 
-    Kids Accounts  v1.6
+    Kids Accounts  v1.9
   </h1>
 
   <div id="app">
@@ -143,18 +143,18 @@
             </div>
           </div>
            <div class="voice-modal-card" @click.stop>
-    <div class="voice-modal-header">
-      <h3>🎙️ AI Voice Command</h3>
-      <button class="btn-close-modal" @click="closeVoiceModal">✕</button>
-    </div>
-
+  
     <div class="voice-blueprint-box">
       <p class="blueprint-title">🗣️ Spoken Sentence Guide:</p>
       <code class="blueprint-syntax">
-        [remove/add] X point Y [from/to] [child] for a [what] from [place]
+        <b style="color:red">Remove</b> <b style="color:white">X.Y</b> from <b style="color:yellow">child</b><br class="xbreak"> 
+        for a <b style="color:cyan">what</b> from <b  style="color:orange">place</b>        
+        <button  style="display: inline-block; margin-left: 8px;font-size: 10px;border:1px solid silver;border-radius:3px"  type="button" @click="toggleExamples">{{ showExamples ? 'Hide Examples' : 'Show Examples' }}</button>
       </code>
-      <p class="blueprint-example">
-        <em>Example: "remove 20 point 99 from Eve for a Plushie from Sainsburys"</em>
+      <p class="blueprint-example" v-if="showExamples">
+        <p style="margin-bottom: 12px"><b style="color:lime">Add</b> <b style="color:white">X.Y</b> to <b style="color:yellow">child</b> for a <b style="color:cyan">what</b></p>
+        <em style="font-size:0.9em">"<b style="color:#f66">Remove</b> <b style="color:white">20 point 99</b> from <b style="color:yellow">Jason</b> for a <b style="color:cyan">Plushie</b> from <b style="color:orange">Sainsburys</b>"</em><br>
+        <em style="font-size:0.9em">"<b style="color:lime">Add</b> <b style="color:white">10 Pounds</b> to <b style="color:yellow">Evie</b> as a <b style="color:cyan">Gift</b>"</em>
       </p>
     </div>
 
@@ -421,8 +421,14 @@ const lastSyncTime = ref(0);
 const isVoiceModalOpen = ref(false);
 const isListening = ref(false);
 const voiceTranscript = ref('');
+const showExamples = ref((window.localStorage.getItem('showExamples') ?  ((window.localStorage.getItem('showExamples') === 'show') ? true : false) : true) );
 const cloudGeminiApiKey = ref('');
 let recognition = null;
+
+function toggleExamples() {
+  showExamples.value = !showExamples.value;
+  window.localStorage.setItem('showExamples', (showExamples.value ? 'show' : 'hide'));
+} 
 
 function closeVoiceModal() {
   if (isListening.value && recognition) recognition.stop();
@@ -482,8 +488,8 @@ async function parseStructuralTranscriptWithAI(text) {
   
   // Replace this placeholder string with your real Google Gemini API Key
 // 🌟 DYNAMIC TRANSITION: Read directly from the secure memory state
-  const GEMINI_API_KEY = cloudGeminiApiKey.value; 
-  const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+  const GEMINI_API_KEY = cloudGeminiApiKey.value;   
+  const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
   // Map known children dynamically so the model matches explicit internal IDs instantly
   const childMappingContext = children.value.map(c => `name: "${c.name}", id: "${c.id}"`).join(' | ');
@@ -500,7 +506,7 @@ async function parseStructuralTranscriptWithAI(text) {
     2. "amount": A strict floating-point calculated number matching the combined "x point y" structure. For example, if input is "20 point 99", output must be 20.99.
     2.a it is also acceptable if the user just says a simple decimal number like "20.99" without the "point" keyword, in which case you should parse it directly as a float.
     2.b or say "20 pounds 99 pence" and you should also parse that correctly as 20.99.
-    3. "targetChildId": Match the mentioned [child] to one of these valid registered records: [ ${childMappingContext} ]. Output the exact string ID. If no match is found, use an empty string "".
+    3. "targetChildId": Match the mentioned [child] to one of these valid registered records: [ ${childMappingContext} ]. "Evie" is Eve. Output the exact string ID. If no match is found, use an empty string "".
     4. "what": The description corresponding to the "for a [what]" segment. Clean up capitalization.
     5. "where": The location or store corresponding to the "from [place]" segment. Clean up capitalization.
 
@@ -518,7 +524,7 @@ async function parseStructuralTranscriptWithAI(text) {
       })
     });
 
-    const responseData = await response.json();
+    const responseData = await response.json();    
     const cleanJsonString = responseData.candidates[0].content.parts[0].text.trim();
     
     // Process extracted payload values safely
@@ -1714,43 +1720,45 @@ button.Withdraw {
 
 /* Structural Instruction Grammar Box */
 .voice-blueprint-box {
-  background: #0f172a;
-  border: 1px solid #1e293b;
-  padding: 12px;
-  border-radius: 8px;
-  margin-bottom: 24px;
+  text-align: left;
 }
 
 .blueprint-title {
   margin: 0 0 6px 0;
-  font-size: 0.8rem;
+  font-size: 1rem;
   font-weight: bold;
   color: #818cf8;
 }
 
 .blueprint-syntax {
+  background: transparent !important;
+  padding: 0px;
   display: block;
-  font-family: monospace;
-  font-size: 0.85rem;
+  font-family: arial;
+  font-size: 0.9rem;
   color: #cbd5e1;
   word-break: break-word;
   line-height: 1.4;
+   text-align: left;
 }
 
 .blueprint-example {
   margin: 8px 0 0 0;
-  font-size: 0.75rem;
+  font-size: 1rem;
   color: var(--text-muted);
+  filter: saturate(0.3);
 }
 
 /* Recording Action Interaction Center */
 .voice-status-container {
-  display: flex;
-  flex-direction: column;
+display: grid;
+  grid-template-columns: 130px 1fr;
   align-items: center;
-  justify-content: center;
+  justify-content: space-evenly;
   position: relative;
-  margin: 20px 0;
+  margin: 0px 0px 20px;
+  gap: 16px;
+  justify-items: center;
 }
 
 .btn-mic-action {
@@ -1768,6 +1776,7 @@ button.Withdraw {
   z-index: 2;
   transition: all 0.2s ease;
   box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7);
+  margin:8px;
 }
 
 .btn-mic-action.recording {
@@ -1808,8 +1817,23 @@ button.Withdraw {
   color: #cbd5e1;
   margin-top: 16px;
 }
+.xbreak {
+  display: none;
+}
+
 /* Ensure mobile stacking rules do not distort header utilities button configurations */
 @media (max-width: 600px) {
+
+  .blueprint-syntax {
+    font-size: 1.4em;
+  }
+
+.xbreak {
+  display: inline;
+}
+  .blueprint-title {
+    display: none;
+  }
 
   .desktop-grid-header, .desktop-grid-row{
     grid-template-columns: 100px 1fr 90px !important;
