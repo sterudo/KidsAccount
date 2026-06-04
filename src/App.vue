@@ -8,7 +8,7 @@
 
   <h1 class="app-title"> 
     <button style="float:left;" v-if="currentScreen !== 'dashboard'" @click="backToDashboard"  class="btn btn-back-nav">⬅ Back</button> 
-    Kids Accounts  <span style="font-size:12px">v1.11</span>
+    Kids Accounts  <span style="font-size:12px">v1.12</span>
   </h1>
 
   <div id="app">
@@ -161,15 +161,23 @@
     <div class="voice-status-container">
       <div v-if="isListening" class="pulse-ring"></div>
       <p class="action-hint-text">
-  {{ isListening ? 'Tap once to STOP and analyze your words' : 'Tap once, speak clearly, then tap stop' }}
+  {{ isListening ? 'Tap once to STOP' : 'Tap once,' }}
+  <p style="font-weight: normal;">
+  {{ isListening ? '' : ' speak clearly, ' }}
+  </p>
+    <p style="font-weight: bold;">
+  {{ isListening ? '' : 'then tap stop' }}
+   
+  </p>
 </p>
+
       <button 
       type="button"
       @click="toggleVoiceCapture" 
       class="btn-mic-action"
       :class="{ 'recording': isListening }"
     >
-      {{ isListening ? '🛑 Stop & Parse' : '🎤 Start Recording' }}
+      {{ isListening ? '🛑' : '🎤' }}
     </button>
 
 
@@ -1812,10 +1820,11 @@ display: grid;
 }
 
 .action-hint-text {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  margin-top: 14px;
-  text-align: center;
+    font-size: 1rem;
+    color: white;
+    margin-top: 14px;
+    text-align: center;
+    font-weight: bold;
 }
 
 /* Audio Wave Pulse Animation Ring */
