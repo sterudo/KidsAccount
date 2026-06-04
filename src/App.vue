@@ -8,7 +8,7 @@
 
   <h1 class="app-title"> 
     <button style="float:left;" v-if="currentScreen !== 'dashboard'" @click="backToDashboard"  class="btn btn-back-nav">⬅ Back</button> 
-    Kids Accounts  v1.5
+    Kids Accounts  v1.6
   </h1>
 
   <div id="app">
@@ -30,9 +30,11 @@
         </div>
       
         <div class="user-selector-and-refresh-group">
-          <button type="button" @click="fetchSyncDatabase" class="btn btn-refresh-sync" title="Sync Cloud Data" :disabled="isLoading">
-            {{ isLoading ? '⏳' : '🔄 Refresh' }}
+
+          <button type="button" @click="fetchSyncDatabase" class="btn btn-refresh-sync" :disabled="isLoading">
+            {{ isLoading ? '⏳ Loading' : '🔄 Refresh' }}
           </button>
+  
 
           <div class="user-selector">
             <label for="global-user">User:</label>
@@ -140,36 +142,44 @@
               </div>
             </div>
           </div>
+           <div class="voice-modal-card" @click.stop>
+    <div class="voice-modal-header">
+      <h3>🎙️ AI Voice Command</h3>
+      <button class="btn-close-modal" @click="closeVoiceModal">✕</button>
+    </div>
 
-          <div class="card voice-card" style="margin-bottom: 20px;">
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <h3 style="margin: 0; font-size: 1rem;">🎙️ AI Voice Logger</h3>
-              <span v-if="isListening" class="pulse-indicator">🔴 Recording...</span>
-            </div>
-            
-            <p class="text-muted" style="font-size: 0.8rem; margin: 6px 0 12px 0;">
-              Hold or tap the button and say: <em>"Withdraw 20.99 from Eve buying a Plushie at Sainsburys"</em>
-            </p>
+    <div class="voice-blueprint-box">
+      <p class="blueprint-title">🗣️ Spoken Sentence Guide:</p>
+      <code class="blueprint-syntax">
+        [remove/add] X point Y [from/to] [child] for a [what] from [place]
+      </code>
+      <p class="blueprint-example">
+        <em>Example: "remove 20 point 99 from Eve for a Plushie from Sainsburys"</em>
+      </p>
+    </div>
 
-            <div style="display: flex; gap: 10px;">
-              <button 
-                type="button" 
-                @mousedown="startVoiceCapture" 
-                @mouseup="stopVoiceCapture"
-                @touchstart.prevent="startVoiceCapture"
-                @touchend.prevent="stopVoiceCapture"
-                class="btn"
-                :class="isListening ? 'btn-danger' : 'btn-primary'"
-                style="flex: 1; padding: 12px; display: flex; align-items: center; justify-content: center; gap: 8px;"
-              >
-                {{ isListening ? '🛑 Release to Parse' : '🎤 Hold to Speak' }}
-              </button>
-            </div>
+    <div class="voice-status-container">
+      <div v-if="isListening" class="pulse-ring"></div>
+      <button 
+        type="button"
+        @mousedown="startVoiceCapture" 
+        @mouseup="stopVoiceCapture"
+        @touchstart.prevent="startVoiceCapture"
+        @touchend.prevent="stopVoiceCapture"
+        class="btn-mic-action"
+        :class="{ 'recording': isListening }"
+      >
+        {{ isListening ? '🛑' : '🎤' }}
+      </button>
+      <p class="action-hint-text">
+        {{ isListening ? 'Release button to automatically parse fields' : 'Press & HOLD button to speak' }}
+      </p>
+    </div>
 
-            <div v-if="voiceTranscript" class="voice-transcript-preview">
-              <strong>Heard:</strong> "{{ voiceTranscript }}"
-            </div>
-          </div>
+    <div v-if="voiceTranscript" class="voice-transcript-review">
+      <strong>Heard Text:</strong> "{{ voiceTranscript }}"
+    </div>
+  </div>
         </section>
 
         <!-- VIEW 4: LEDGER / STATEMENT DETAILED VIEW -->
@@ -371,6 +381,7 @@
     </div>
   </div>
 
+
 </template>
 
 <script setup>
@@ -406,27 +417,35 @@ const filterEndDate = ref('');
 // --- DATA ACCESS LAYER ---
 // Update your fetchSyncDatabase function to store it
 const lastSyncTime = ref(0); 
-
+// Voice State Controls
+const isVoiceModalOpen = ref(false);
 const isListening = ref(false);
 const voiceTranscript = ref('');
+const cloudGeminiApiKey = ref('');
 let recognition = null;
 
-// Initialize Web Speech API
+function closeVoiceModal() {
+  if (isListening.value && recognition) recognition.stop();
+  isVoiceModalOpen.value = false;
+  voiceTranscript.value = '';
+}
+
+// Instantiate Native Browser Web Speech Engine
 if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   recognition = new SpeechRecognition();
   recognition.continuous = false;
   recognition.interimResults = false;
-  recognition.lang = 'en-GB'; // or 'en-US'
-  
+  recognition.lang = 'en-GB'; // Tuned specifically for UK phrasing (Pounds/Pence)
+
   recognition.onresult = (event) => {
     const resultText = event.results[0][0].transcript;
     voiceTranscript.value = resultText;
-    parseTranscriptWithAI(resultText);
+    parseStructuralTranscriptWithAI(resultText);
   };
 
   recognition.onerror = (err) => {
-    console.error("Speech Recognition Error:", err);
+    console.error("Speech Engine Error:", err);
     isListening.value = false;
   };
 
@@ -437,7 +456,7 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
 
 function startVoiceCapture() {
   if (!recognition) {
-    alert("Voice recognition is not supported on this browser/device profile.");
+    alert("Speech recognition is not supported natively on this hardware/browser profile.");
     return;
   }
   voiceTranscript.value = '';
@@ -452,31 +471,42 @@ function stopVoiceCapture() {
   }
 }
 
-// 🧠 THE AI PARSING ENGINE (Calling Gemini / LLM API)
-async function parseTranscriptWithAI(text) {
-  isLoading.value = true; // Turn on global loading spinner overlay
+// 🧠 THE STRUCTURED AI PARSING PIPELINE
+async function parseStructuralTranscriptWithAI(text) {
+  // Check if the key has been synchronized yet
+  if (!cloudGeminiApiKey.value) {
+    alert("Voice Engine Error: Gemini API key has not synchronized from the spreadsheet config yet.");
+    return;
+  }
+  isLoading.value = true; // Engage your app's global cloud loading scrimmage overlay
   
-  // Replace this placeholder string with your real API key or proxy endpoint
-  const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE"; 
+  // Replace this placeholder string with your real Google Gemini API Key
+// 🌟 DYNAMIC TRANSITION: Read directly from the secure memory state
+  const GEMINI_API_KEY = cloudGeminiApiKey.value; 
   const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-  // Dynamically feed the system current known context parameters so it maps exact child matches!
-  const knownChildren = children.value.map(c => `name: "${c.name}", id: "${c.id}"`).join(' | ');
+  // Map known children dynamically so the model matches explicit internal IDs instantly
+  const childMappingContext = children.value.map(c => `name: "${c.name}", id: "${c.id}"`).join(' | ');
 
-  const prompt = `
-    You are an expert parsing assistant for a kids allowance app ledger.
-    Analyze this spoken text sentence: "${text}"
-    
-    Extract the attributes into a valid JSON object matching these specific keys:
-    - actionType: Must be exactly "withdrawal" or "deposit"
-    - targetChildId: Look up the child name mentioned in the text and match it to one of these valid registered records: [ ${knownChildren} ]. If no match found, output an empty string.
-    - amount: A strict floating-point number.
-    - what: What was bought or recorded description.
-    - where: The location or store where transaction happened.
+  const strictPrompt = `
+    You are a precise data parsing microservice for a family pocket money app.
+    The user is dictating a transaction following this structural syntax:
+    "[remove/add] x point y [from /to] [child] for a [what] from [place]"
+
+    Analyze this raw input text captured from speech-to-text: "${text}"
+
+    Your task is to extract the details into a valid JSON object matching these exact keys:
+    1. "actionType": Must be exactly "withdrawal" (if text says "remove") or "deposit" (if text says "add" or "at").
+    2. "amount": A strict floating-point calculated number matching the combined "x point y" structure. For example, if input is "20 point 99", output must be 20.99.
+    2.a it is also acceptable if the user just says a simple decimal number like "20.99" without the "point" keyword, in which case you should parse it directly as a float.
+    2.b or say "20 pounds 99 pence" and you should also parse that correctly as 20.99.
+    3. "targetChildId": Match the mentioned [child] to one of these valid registered records: [ ${childMappingContext} ]. Output the exact string ID. If no match is found, use an empty string "".
+    4. "what": The description corresponding to the "for a [what]" segment. Clean up capitalization.
+    5. "where": The location or store corresponding to the "from [place]" segment. Clean up capitalization.
 
     CRITICAL RULES:
-    1. Respond with ONLY the clean JSON block raw string. No markdown formatting markers (\`\`\`json), no preamble text.
-    2. Example output structure: {"actionType": "withdrawal", "targetChildId": "child-123", "amount": 14.50, "what": "Comic Book", "where": "Waterstones"}
+    - Respond with ONLY the raw JSON string block. No markdown markers (\`\`\`json), no wrap code accents, no conversational text.
+    - If speech errors cause small word modifications (e.g., "Sainsbury's" heard as "Sainsburys" or "Sanbries"), use contextual logic to fix the spelling of the location or what item cleanly.
   `;
 
   try {
@@ -484,32 +514,38 @@ async function parseTranscriptWithAI(text) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
+        contents: [{ parts: [{ text: strictPrompt }] }]
       })
     });
 
-    const data = await response.json();
-    const rawTextResponse = data.candidates[0].content.parts[0].text.trim();
+    const responseData = await response.json();
+    const cleanJsonString = responseData.candidates[0].content.parts[0].text.trim();
     
-    // Parse the returned AI structure safely
-    const parsedData = JSON.parse(rawTextResponse);
+    // Process extracted payload values safely
+    const result = JSON.parse(cleanJsonString);
     
-    // 🌟 AUTOMATICALLY SEED VUE FORM BINDINGS FROM AI RESULTS
-    if (parsedData.targetChildId) {
-      selectedChildId.value = parsedData.targetChildId;
-      currentScreen.value = 'ledger'; // Slide out child context view if needed
+    // 🌟 SYNC PARSED DATA TO NATIVE VUE FORM FORMULAS
+    if (result.targetChildId) {
+      selectedChildId.value = result.targetChildId;
+      
+      // Auto-populate the specific log form object parameters
+      txForm.value.type = result.actionType || 'withdrawal';
+      txForm.value.amount = result.amount || 0;
+      txForm.value.what = result.what || '';
+      txForm.value.where = result.where || '';
+      
+      // Navigate cleanly straight into the ledger form view so the user can review it
+      currentScreen.value = 'ledger';
+      isVoiceModalOpen.value = false; // Hide modal on complete parsing success
+    } else {
+      alert("AI was unable to distinctly identify which child this transaction belonged to. Please adjust manually.");
     }
-    
-    txForm.value.type = parsedData.actionType || 'withdrawal';
-    txForm.value.amount = parsedData.amount || 0;
-    txForm.value.what = parsedData.what || '';
-    txForm.value.where = parsedData.where || '';
 
   } catch (error) {
-    console.error("AI Parser Error:", error);
-    alert("Could not process voice query structure. Please adjust fields manually.");
+    console.error("AI Dictation Parser Failure:", error);
+    alert("Parsing Error: Could not cleanly break down spoken template values. Please enter manually.");
   } finally {
-    isLoading.value = false;
+    isLoading.value = false; // Clear loading scrim indicator
   }
 }
 
@@ -555,10 +591,16 @@ async function fetchSyncDatabase() {
     
     // 3. Normalize Authorized Devices
     authorizedDevices.value = (data.authorizedDevices || []).map(d => String(d).toLowerCase().trim());
+
+    
     
     console.log("Normalized Database Clean Sync:", children.value, transactions.value);
-    lastSyncTime.value = Date.now();
+    // 🌟 NEW: Capture the API key passed down securely from your Sheet configuration
+    if (data.geminiApiKey) {
+      cloudGeminiApiKey.value = data.geminiApiKey;
+    }
 
+    lastSyncTime.value = Date.now();
   } catch (err) {
     console.error("Failed to sync database:", err);
   } finally {
@@ -1608,6 +1650,163 @@ button.Withdraw {
   0% { opacity: 0.4; }
   50% { opacity: 1; }
   100% { opacity: 0.4; }
+}
+
+/* Voice Trigger Navigation Button */
+.btn-mic-trigger {
+  background: #312e81;
+  color: #e0e7ff;
+  border: 1px solid #4338ca !important;
+  padding: 6px 10px;
+  font-size: 12px !important;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* Modal Overlay Background Blur Dimmer */
+.voice-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+}
+
+/* Modal Window Content Container */
+.voice-modal-card {
+    background: #17192d;
+    border: 1px solid var(--border-color);
+    width: 100%;
+    max-width: 100%;
+    border-radius: 12px;
+    padding: 8px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+    box-sizing: border-box;
+}
+
+.voice-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.voice-modal-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--text-main);
+}
+
+.btn-close-modal {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+/* Structural Instruction Grammar Box */
+.voice-blueprint-box {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+
+.blueprint-title {
+  margin: 0 0 6px 0;
+  font-size: 0.8rem;
+  font-weight: bold;
+  color: #818cf8;
+}
+
+.blueprint-syntax {
+  display: block;
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+.blueprint-example {
+  margin: 8px 0 0 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* Recording Action Interaction Center */
+.voice-status-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  margin: 20px 0;
+}
+
+.btn-mic-action {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: #4338ca;
+  border: none;
+  font-size: 2rem;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7);
+}
+
+.btn-mic-action.recording {
+  background: #ef4444;
+  transform: scale(0.95);
+}
+
+.action-hint-text {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 14px;
+  text-align: center;
+}
+
+/* Audio Wave Pulse Animation Ring */
+.pulse-ring {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.4);
+  animation: wavePulse 1.8s infinite ease-out;
+  z-index: 1;
+}
+
+@keyframes wavePulse {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+/* Heard Transcript Summary Box */
+.voice-transcript-review {
+  background: #1e293b;
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  border-left: 3px solid #818cf8;
+  color: #cbd5e1;
+  margin-top: 16px;
 }
 /* Ensure mobile stacking rules do not distort header utilities button configurations */
 @media (max-width: 600px) {
