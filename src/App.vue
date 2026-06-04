@@ -8,7 +8,7 @@
 
   <h1 class="app-title"> 
     <button style="float:left;" v-if="currentScreen !== 'dashboard'" @click="backToDashboard"  class="btn btn-back-nav">⬅ Back</button> 
-    Kids Accounts  v1.9
+    Kids Accounts  <span style="font-size:12px">v1.11</span>
   </h1>
 
   <div id="app">
@@ -160,20 +160,20 @@
 
     <div class="voice-status-container">
       <div v-if="isListening" class="pulse-ring"></div>
-      <button 
-        type="button"
-        @mousedown="startVoiceCapture" 
-        @mouseup="stopVoiceCapture"
-        @touchstart.prevent="startVoiceCapture"
-        @touchend.prevent="stopVoiceCapture"
-        class="btn-mic-action"
-        :class="{ 'recording': isListening }"
-      >
-        {{ isListening ? '🛑' : '🎤' }}
-      </button>
       <p class="action-hint-text">
-        {{ isListening ? 'Release button to automatically parse fields' : 'Press & HOLD button to speak' }}
-      </p>
+  {{ isListening ? 'Tap once to STOP and analyze your words' : 'Tap once, speak clearly, then tap stop' }}
+</p>
+      <button 
+      type="button"
+      @click="toggleVoiceCapture" 
+      class="btn-mic-action"
+      :class="{ 'recording': isListening }"
+    >
+      {{ isListening ? '🛑 Stop & Parse' : '🎤 Start Recording' }}
+    </button>
+
+
+     
     </div>
 
     <div v-if="voiceTranscript" class="voice-transcript-review">
@@ -425,6 +425,38 @@ const showExamples = ref((window.localStorage.getItem('showExamples') ?  ((windo
 const cloudGeminiApiKey = ref('');
 let recognition = null;
 
+function toggleVoiceCapture() {
+  if (!recognition) {
+    alert("Speech recognition is not natively supported on this device profile.");
+    return;
+  }
+
+  if (isListening.value) {
+    // 🛑 STOP CAPTURING: Gently tells iOS to finish compiling the audio
+    isListening.value = false;
+    try {
+      recognition.stop(); 
+      console.log("iOS Safety: Manually finalized audio capture.");
+    } catch (err) {
+      console.error("Failed closing session gracefully:", err);
+    }
+  } else {
+    // 🎤 START CAPTURING
+    voiceTranscript.value = '';
+    isListening.value = true;
+    
+    try {
+      recognition.start();
+      console.log("iOS Safety: Audio capture stream opened successfully.");
+    } catch (e) {
+      console.error("iOS Recognition startup fault:", e);
+      // Safety release: clears any zombie instances hung up by previous hold-lifts
+      recognition.abort();
+      setTimeout(() => { recognition.start(); }, 250);
+    }
+  }
+}
+
 function toggleExamples() {
   showExamples.value = !showExamples.value;
   window.localStorage.setItem('showExamples', (showExamples.value ? 'show' : 'hide'));
@@ -444,11 +476,22 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
   recognition.interimResults = false;
   recognition.lang = 'en-GB'; // Tuned specifically for UK phrasing (Pounds/Pence)
 
-  recognition.onresult = (event) => {
-    const resultText = event.results[0][0].transcript;
-    voiceTranscript.value = resultText;
-    parseStructuralTranscriptWithAI(resultText);
+ recognition.onresult = async (event) => {
+    // Pulls the text block natively recorded by WebKit
+    const transcript = event.results[0][0].transcript;
+    console.log("Speech captured successfully:", transcript);
+    
+    if (transcript.trim().length > 0) {
+      // Send it off to gemini-2.5-flash
+      await parseStructuralTranscriptWithAI(transcript);
+    } else {
+      alert("No speech text detected. Please speak closer to your microphone phone node.");
+    }
   };
+
+  // Prevent iOS Safari from prematurely timing out while you pause between words
+  recognition.continuous = false;
+  recognition.interimResults = false;
 
   recognition.onerror = (err) => {
     console.error("Speech Engine Error:", err);
@@ -460,22 +503,6 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
   };
 }
 
-function startVoiceCapture() {
-  if (!recognition) {
-    alert("Speech recognition is not supported natively on this hardware/browser profile.");
-    return;
-  }
-  voiceTranscript.value = '';
-  isListening.value = true;
-  recognition.start();
-}
-
-function stopVoiceCapture() {
-  if (recognition && isListening.value) {
-    recognition.stop();
-    isListening.value = false;
-  }
-}
 
 // 🧠 THE STRUCTURED AI PARSING PIPELINE
 async function parseStructuralTranscriptWithAI(text) {
