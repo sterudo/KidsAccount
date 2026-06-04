@@ -590,8 +590,8 @@ async function parseStructuralTranscriptWithAI(text) {
   }
 }
 
-
 async function fetchSyncDatabase() {
+  if(isListening.value) return;
   isLoading.value = true;
   try {
     const response = await fetch(`${SHEET_API_URL}?action=getInitialData`);
