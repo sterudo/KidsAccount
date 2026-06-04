@@ -8,7 +8,7 @@
 
   <h1 class="app-title"> 
     <button style="float:left;" v-if="currentScreen !== 'dashboard'" @click="backToDashboard"  class="btn btn-back-nav">⬅ Back</button> 
-    Kids Accounts  <span style="font-size:12px">v1.13</span>
+    Kids Accounts  <span style="font-size:12px">v1.18</span>
   </h1>
 
   <div id="app">
@@ -34,7 +34,8 @@
           <button type="button" @click="fetchSyncDatabase" class="btn btn-refresh-sync" :disabled="isLoading">
             {{ isLoading ? '⏳ Loading' : '🔄 Refresh' }}
           </button>
-  
+
+          <button v-if="currentScreen === 'dashboard'" class="dbgBtn" type="button" @click="debugMode = !debugMode">{{ debugMode ? 'Disable Debug' : 'Enable Debug' }}</button>
 
           <div class="user-selector">
             <label for="global-user">User:</label>
@@ -158,7 +159,7 @@
       </p>
     </div>
 
-    <div class="voice-status-container">
+    <div class="voice-status-container" >
       <div v-if="isListening" class="pulse-ring"></div>
       <p class="action-hint-text">
   {{ isListening ? 'Tap once to STOP' : 'Tap once,' }}
@@ -186,6 +187,19 @@
 
     <div v-if="voiceTranscript" class="voice-transcript-review">
       <strong>Heard Text:</strong> "{{ voiceTranscript }}"
+    </div>
+
+    <div class="voice-debug-console" v-if="debugMode">
+      <div class="debug-console-header">
+        <span>📋 System Activity Log:</span>
+        <button type="button" @click="voiceLogs = []" class="btn-clear-logs">Clear</button>
+      </div>
+      <div class="debug-log-rows">
+        <div v-for="(log, idx) in voiceLogs" :key="idx" class="debug-log-row">
+          <span class="log-time">[{{ log.time }}]</span> {{ log.msg }}
+        </div>
+        <div v-if="voiceLogs.length === 0" class="debug-log-empty">No events recorded yet. Tap Start to test...</div>
+      </div>
     </div>
   </div>
         </section>
@@ -398,6 +412,7 @@ import { ref, computed, onMounted } from 'vue';
 // paste your Google App Script deployed endpoint web app URL here
 const SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbzg05Y22_KksejVZzQBeq0coDyFn4LvMAbKnsijv8x9LJqaUyCAL-AuK4kPOorm6S0P/exec';
 
+const debugMode = ref(false);
 const currentScreen = ref('dashboard');
 const selectedChildId = ref(null);
 const showMetaFields = ref(false);
@@ -429,39 +444,143 @@ const lastSyncTime = ref(0);
 const isVoiceModalOpen = ref(false);
 const isListening = ref(false);
 const voiceTranscript = ref('');
+const voiceLogs = ref([]); // 🌟 NEW: Array to hold on-screen telemetry logs
 const showExamples = ref((window.localStorage.getItem('showExamples') ?  ((window.localStorage.getItem('showExamples') === 'show') ? true : false) : true) );
 const cloudGeminiApiKey = ref('');
 let recognition = null;
 
+// 🌟 CHANGE: We do NOT create a permanent global instance here anymore.
+// We will instantiate it dynamically on-demand to bypass iOS freezes.
+let activeRecognitionInstance = null;
+function logToScreen(msg) {
+  if(!debugMode.value) return; // Skip logging if debug mode is off
+  const now = new Date();
+  const timeStr = now.toTimeString().split(' ')[0] + '.' + String(now.getMilliseconds()).padStart(3, '0');
+  voiceLogs.value.unshift({ time: timeStr, msg: msg }); // Newest logs show up at the top
+  console.log(`[PWA-VoiceLog] ${timeStr}: ${msg}`);
+}
+
 function toggleVoiceCapture() {
-  if (!recognition) {
-    alert("Speech recognition is not natively supported on this device profile.");
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  
+  if (!SpeechRecognition) {
+    logToScreen("❌ CRITICAL: SpeechRecognition APIs missing from window context.");
     return;
   }
 
   if (isListening.value) {
-    // 🛑 STOP CAPTURING: Gently tells iOS to finish compiling the audio
+    logToScreen("🛑 Stop button tapped. Wrapping up processing stream gracefully...");
     isListening.value = false;
-    try {
-      recognition.stop(); 
-      console.log("iOS Safety: Manually finalized audio capture.");
-    } catch (err) {
-      console.error("Failed closing session gracefully:", err);
+    
+    if (activeRecognitionInstance) {
+      try {
+        logToScreen("Requesting instance wrap-up via .stop()...");
+        // 🌟 CHANGE: Because continuous is true, stop allows WebKit to finish transcribing 
+        // the remaining buffer instead of abandoning it instantly!
+        activeRecognitionInstance.stop(); 
+      } catch (err) {
+        logToScreen(`❌ Exception during .stop(): ${err.message}`);
+      }
     }
   } else {
-    // 🎤 START CAPTURING
+    logToScreen("🎤 Start button tapped. Initializing continuous stream module...");
     voiceTranscript.value = '';
     isListening.value = true;
-    
+
     try {
-      recognition.start();
-      console.log("iOS Safety: Audio capture stream opened successfully.");
-    } catch (e) {
-      console.error("iOS Recognition startup fault:", e);
-      // Safety release: clears any zombie instances hung up by previous hold-lifts
-      recognition.abort();
-      setTimeout(() => { recognition.start(); }, 250);
+      activeRecognitionInstance = new SpeechRecognition();
+      
+      // 🌟 THE FIX FOR iOS STANDALONE: Continuous true maintains the audio context pipeline
+      activeRecognitionInstance.continuous = true; 
+      activeRecognitionInstance.interimResults = false;
+      activeRecognitionInstance.lang = 'en-GB';
+      
+      logToScreen("📦 Continuous instance built. Wiring event handlers...");
+
+      activeRecognitionInstance.onstart = () => {
+        logToScreen("🔔 EVENT: .onstart - Mic channel is officially OPEN.");
+      };
+
+      activeRecognitionInstance.onaudiostart = () => {
+        logToScreen("🔊 EVENT: .onaudiostart - Audio processing engine is reading bytes.");
+      };
+
+      activeRecognitionInstance.onsoundstart = () => {
+        logToScreen("🎵 EVENT: .onsoundstart - Sound energy detected.");
+      };
+
+      activeRecognitionInstance.onspeechstart = () => {
+        logToScreen("🗣 EVENT: .onspeechstart - Speech cadence identified!");
+      };
+
+      activeRecognitionInstance.onresult = async (event) => {
+        logToScreen("🎉 EVENT: .onresult fired! Processing payload...");
+        
+        if (!event.results || event.results.length === 0) {
+          logToScreen("⚠ Result package returned blank structures.");
+          return;
+        }
+        
+        // Loop through matches to catch continuous segments
+        let finalTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscript += event.results[i][0].transcript;
+          }
+        }
+        
+        logToScreen(`💬 Matched text string: "${finalTranscript}"`);
+        voiceTranscript.value = finalTranscript;
+
+        if (finalTranscript.trim().length > 0) {
+          logToScreen("🧠 Dispatching raw text payload to Gemini-2.5-Flash...");
+          await parseStructuralTranscriptWithAI(finalTranscript);
+          
+          // Auto close modal on successfully completing the transaction assignment loop
+          isVoiceModalOpen.value = false;
+          cleanupInstance();
+        }
+      };
+
+      activeRecognitionInstance.onerror = (err) => {
+        logToScreen(`❌ EVENT ERROR: .onerror triggered! Reason: "${err.error}"`);
+        // If iOS fires a 'no-speech' timeout error, don't break, just clean up
+        if (err.error === 'no-speech') {
+          logToScreen("ℹ Notice: No speech detected by system before timeout threshold.");
+        }
+        cleanupInstance();
+      };
+
+      activeRecognitionInstance.onend = () => {
+        logToScreen("⌛ EVENT: .onend - Lifetime sequence finished.");
+        cleanupInstance();
+      };
+
+      logToScreen("🚀 Executing activeInstance.start()...");
+      activeRecognitionInstance.start();
+
+    } catch (startError) {
+      logToScreen(`❌ CRITICAL: Startup allocation broke: ${startError.toString()}`);
+      cleanupInstance();
     }
+  }
+}
+
+function closeVoiceModal() {
+  isVoiceModalOpen.value = false;
+  cleanupInstance();
+  logToScreen("🚪 Voice diagnostic tray collapsed.");
+}
+// 🌟 CRITICAL: Garbage collection routine ensures iOS releases the microphone resource completely
+function cleanupInstance() {
+  isListening.value = false;
+  if (activeRecognitionInstance) {
+    try {
+      activeRecognitionInstance.abort();
+      logToScreen("🧹 Forced cleanup: .abort() run on instance context.");
+    } catch(e) {}
+    activeRecognitionInstance = null;
+    logToScreen("🗑 Memory Sanitized: activeRecognitionInstance set to null.");
   }
 }
 
@@ -469,12 +588,6 @@ function toggleExamples() {
   showExamples.value = !showExamples.value;
   window.localStorage.setItem('showExamples', (showExamples.value ? 'show' : 'hide'));
 } 
-
-function closeVoiceModal() {
-  if (isListening.value && recognition) recognition.stop();
-  isVoiceModalOpen.value = false;
-  voiceTranscript.value = '';
-}
 
 // Instantiate Native Browser Web Speech Engine
 if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
@@ -487,15 +600,14 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
  recognition.onresult = async (event) => {
     // Pulls the text block natively recorded by WebKit
     const transcript = event.results[0][0].transcript;
-    console.log("Speech captured successfully:", transcript);
-    
+    console.log("Speech captured successfully:", transcript);  
     if (transcript.trim().length > 0) {
       // Send it off to gemini-2.5-flash
       await parseStructuralTranscriptWithAI(transcript);
     } else {
       alert("No speech text detected. Please speak closer to your microphone phone node.");
     }
-  };
+  } 
 
   // Prevent iOS Safari from prematurely timing out while you pause between words
   recognition.continuous = false;
@@ -509,7 +621,9 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
   recognition.onend = () => {
     isListening.value = false;
   };
-}
+} else {
+  console.log("Speech recognition is not supported in this browser. Please use a compatible browser or device to access voice features.");
+};
 
 
 // 🧠 THE STRUCTURED AI PARSING PIPELINE
@@ -645,7 +759,7 @@ async function fetchSyncDatabase() {
     if (data.geminiApiKey) {
       cloudGeminiApiKey.value = data.geminiApiKey;
     }
-
+    closeVoiceModal();
     lastSyncTime.value = Date.now();
   } catch (err) {
     console.error("Failed to sync database:", err);
@@ -1860,6 +1974,16 @@ display: grid;
 }
 .xbreak {
   display: none;
+}
+
+.dbgBtn {
+    color: silver;
+    border: transparent;
+    padding: 5px;
+    border-radius: 3px;
+    position: absolute;
+    background: #225;
+    right: 200px;
 }
 
 /* Ensure mobile stacking rules do not distort header utilities button configurations */
