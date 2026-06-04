@@ -233,9 +233,44 @@
                     placeholder="e.g. Ice cream" 
                     required 
                     @focus="activeHelper = 'what'"
-                    @blur="closeHelperDeferred"   />
-                  <button type="button" @click.prevent.stop="activeHelper = 'what'" class="btn btn-assist" title="Show past descriptions">✨</button>
+                    @blur="closeHelperDeferred"   
+                  />
+                  <button type="button" @click.prevent.stop="triggerCameraCapture" class="btn btn-assist" style="margin-right: 4px;" title="Scan Item with AI Camera">📸</button>
+                  
+                  <button 
+                    type="button" 
+                    @click.prevent.stop="activeHelper = activeHelper === 'what' ? '' : 'what'" 
+                    class="btn btn-assist" 
+                    :style="activeHelper === 'what' ? 'background: #451a1a; border-color: #ef4444;' : ''"
+                    :title="activeHelper === 'what' ? 'Close list' : 'Show past descriptions'"
+                  >
+                    {{ activeHelper === 'what' ? '✕' : '✨' }}
+                  </button>
                 </div>
+                
+                <input 
+                  type="file" 
+                  id="hiddenCameraInput" 
+                  accept="image/*" 
+                  capture="environment" 
+                  style="display: none;" 
+                  @change="handleCameraCapture"
+                />
+
+                <div v-if="aiWhatSuggestions.length > 0" class="shop-suggestions-tray" style="margin-top: 6px;">
+                  <span class="suggestion-tray-title">AI Suggestions:</span>
+                  <button 
+                    type="button" 
+                    v-for="item in aiWhatSuggestions" 
+                    :key="item" 
+                    @mousedown.prevent="txForm.what = item; aiWhatSuggestions = []"
+                    class="badge-shop-suggestion"
+                  >
+                    ✨ {{ item }}
+                  </button>
+                  <button type="button" @click="aiWhatSuggestions = []" class="badge-shop-clear">✕</button>
+                </div>
+
                 <div v-if="activeHelper === 'what' && dynamicSuggestionsWhat.length > 0" class="helper-dropdown">
                   <ul>
                     <li v-for="item in dynamicSuggestionsWhat" :key="item" @mousedown.prevent="selectHelper('what', item)">{{ item }}</li>
@@ -243,7 +278,7 @@
                 </div>
               </div>
 
-              <div class="form-group relative-position" style="grid-column: 1 / 3">
+             <div class="form-group relative-position" style="grid-column: 1 / 3">
                 <label for="tx-where">Where (Optional)</label>
                 <div class="input-with-btn-layout">
                   <input 
@@ -252,16 +287,43 @@
                     type="text" 
                     placeholder="e.g. Corner Shop" 
                     @focus="activeHelper = 'where'"
-                    @blur="closeHelperDeferred"  />
-                  <button type="button" @click.prevent.stop="activeHelper = 'where'" class="btn btn-assist" title="Show past locations">✨</button>
+                    @blur="closeHelperDeferred"  
+                  />
+                  <button type="button" @click.prevent.stop="fetchSmartLocationList" :disabled="isLocating" class="btn btn-assist" style="margin-right: 4px;" title="Find Nearby Shops via AI GPS">
+                    {{ isLocating ? '⏳' : '📍' }}
+                  </button>
+                  
+                  <button 
+                    type="button" 
+                    @click.prevent.stop="activeHelper = activeHelper === 'where' ? '' : 'where'" 
+                    class="btn btn-assist" 
+                    :style="activeHelper === 'where' ? 'background: #451a1a; border-color: #ef4444;' : ''"
+                    :title="activeHelper === 'where' ? 'Close list' : 'Show past locations'"
+                  >
+                    {{ activeHelper === 'where' ? '✕' : '✨' }}
+                  </button>
                 </div>
+
+                <div v-if="nearbyShopSuggestions.length > 0" class="shop-suggestions-tray" style="margin-top: 6px;">
+                  <span class="suggestion-tray-title">AI Nearby:</span>
+                  <button 
+                    type="button" 
+                    v-for="shop in nearbyShopSuggestions" 
+                    :key="shop" 
+                    @mousedown.prevent="txForm.where = shop; nearbyShopSuggestions = []"
+                    class="badge-shop-suggestion"
+                  >
+                    🏪 {{ shop }}
+                  </button>
+                  <button type="button" @click="nearbyShopSuggestions = []" class="badge-shop-clear">✕</button>
+                </div>
+
                 <div v-if="activeHelper === 'where' && dynamicSuggestionsWhere.length > 0" class="helper-dropdown">
                   <ul>
                     <li v-for="item in dynamicSuggestionsWhere" :key="item" @mousedown.prevent="selectHelper('where', item)">{{ item }}</li>
                   </ul>
                 </div>
               </div>
-
          
               <div class="form-group">
                 <label for="tx-amount">Amount (£)</label>
@@ -448,6 +510,183 @@ const voiceLogs = ref([]); // 🌟 NEW: Array to hold on-screen telemetry logs
 const showExamples = ref((window.localStorage.getItem('showExamples') ?  ((window.localStorage.getItem('showExamples') === 'show') ? true : false) : true) );
 const cloudGeminiApiKey = ref('');
 let recognition = null;
+
+
+// 🌟 NEW STATES FOR ADVANCED DYNAMIC SUGGESTIONS
+const isLocating = ref(false);
+const nearbyShopSuggestions = ref([]);
+const aiWhatSuggestions = ref([]);
+
+// --- 📸 CAMERA VISION ENGINE (WHAT SCANNER) ---
+function triggerCameraCapture() {
+  const fileInput = document.getElementById('hiddenCameraInput');
+  if (fileInput) {
+    fileInput.click(); // Triggers native iOS or Android camera overlay interface
+  }
+}
+
+function handleCameraCapture(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  isLoading.value = true;
+  aiWhatSuggestions.value = [];
+  logToScreen(`Camera Capture initialized: ${file.name} (${Math.round(file.size / 1024)} KB)`);
+
+  const reader = new FileReader();
+  reader.onloadend = async () => {
+    // Strip metadata headers to parse the raw clean Base64 string payload required by Gemini
+    const base64Data = reader.result.split(',')[1];
+    const mimeType = file.type;
+
+    await parseImageWithGeminiVision(base64Data, mimeType);
+  };
+  reader.readAsDataURL(file);
+  event.target.value = ''; // Flush input memory tracking
+}
+
+async function parseImageWithGeminiVision(base64Data, mimeType) {
+  if (!cloudGeminiApiKey.value) {
+    logToScreen("❌ Error: Missing Gemini API key reference configuration mapping.");
+    isLoading.value = false;
+    return;
+  }
+
+  logToScreen("Multimodal Engine: Uploading captured frame matrix to gemini-2.5-flash...");
+  const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${cloudGeminiApiKey.value}`;
+
+  const payload = {
+    contents: [{
+      parts: [
+        { text: "Analyze this picture. It is either an item a kid just bought, or a paper store receipt. If the barcode is visible, include it in the analysis. Come up with 3 short, clean alternative descriptions (max 2-5 words each, like 'Pokemon Cards' or 'Chocolate Bar' or 'Lego Set') that would fit beautifully into a ledger array. Output a strict JSON string array matching exactly this syntax layout: [\"Option One\", \"Option Two\", \"Option Three\", \"Option Four\", \"Option Five\", \"Option Six\", \"Option Seven\"]. Do not provide any conversational text, preamble, or markdown markdown tags." },
+        {
+          inlineData: {
+            mimeType: mimeType,
+            data: base64Data
+          }
+        }
+      ]
+    }]
+  };
+
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+    const rawJsonText = data.candidates[0].content.parts[0].text.trim();
+    
+    // Parse response cleanly into the suggestions array
+    const options = JSON.parse(rawJsonText);
+    aiWhatSuggestions.value = Array.isArray(options) ? options : [];
+    logToScreen(`Vision complete! Generated options: ${JSON.stringify(aiWhatSuggestions.value)}`);
+
+  } catch (err) {
+    console.error("Multimodal Vision Exception Error:", err);
+    logToScreen(`❌ Vision breakdown: ${err.message}`);
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+// --- 📍 GPS SMART LOCATOR ENGINE (WHERE SCANNER) ---
+function fetchSmartLocationList() {
+  if (!navigator.geolocation) {
+    alert("Geolocation is completely unsupported by this hardware profile.");
+    return;
+  }
+
+  isLocating.value = true;
+  nearbyShopSuggestions.value = [];
+  logToScreen("GPS Module: Requesting high accuracy location tracking coordinates...");
+
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
+      const lat = position.coords.latitude;
+      const lon = position.coords.longitude;
+      logToScreen(`Location locked! Latitude: ${lat.toFixed(5)}, Longitude: ${lon.toFixed(5)}`);
+
+      try {
+        logToScreen("Querying open-source Nominatim reverse geocoder map data...");
+        // Fetch matching map data block from free OpenStreetMap API structure
+        const osmUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`;
+        const response = await fetch(osmUrl, {
+          headers: { 'User-Agent': 'KidsAccountsManagerPWA/1.18' }
+        });
+        const data = await response.json();
+        
+        const addressBlock = data.address ? JSON.stringify(data.address) : "{}";
+        const explicitName = data.name || "";
+        const fallbackString = data.display_name || "";
+
+        await processLocationContextWithAI(addressBlock, explicitName, fallbackString);
+
+      } catch (osmErr) {
+        logToScreen(`❌ Reverse Geocoding Map request failed: ${osmErr.message}`);
+        isLocating.value = false;
+      }
+    },
+    (geoError) => {
+      logToScreen(`❌ Core Geolocation Error caught (${geoError.code}): ${geoError.message}`);
+      alert("Unable to fetch location details. Ensure PWA location access permissions are enabled on your phone.");
+      isLocating.value = false;
+    },
+    { enableHighAccuracy: true, timeout: 7000 }
+  );
+}
+
+async function processLocationContextWithAI(addressJson, explicitName, completeString) {
+  if (!cloudGeminiApiKey.value) {
+    isLocating.value = false;
+    return;
+  }
+
+  const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${cloudGeminiApiKey.value}`;
+
+  const promptText = `
+    You are a geographical sorting microservice for a ledger application.
+    Analyze this openstreetmap data configuration mapping context:
+    - Target Point Name: "${explicitName}"
+    - Address Payload Breakdown: ${addressJson}
+    - Formatted Location Line: "${completeString}"
+
+    Determine the top 3 most likely clean shop names, supermarket chains, parks, or activity venues located here where a child could spend money. 
+    Clean up specific store number branches (e.g. use "Sainsbury's" instead of "Sainsbury's Superstore #5543").
+    If the business target name "${explicitName}" is a valid commercial shop brand, ensure it occupies index [0] of your output array.
+    If it is a purely residential area, suggest options like "Home", "Corner Shop", or "Online".
+
+    Home is close (50m) to this location: @51.4101982,-0.0322811 then first option is "Home" then "Amazon", then "Online", then anything else.
+
+    Output a strict JSON string array format matching exactly this: 
+    [\"Store Option A\", \"Store Option B\", \"Store Option C\", \"Store Option D\", \"Store Option E\", \"Store Option F\", \"Store Option G\"].
+    No markdown wrappers (\`\`\`json), no trailing text, no extra characters.
+  `;
+
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: promptText }] }]
+      })
+    });
+
+    const resData = await response.json();
+    const rawJsonText = resData.candidates[0].content.parts[0].text.trim();
+    
+    const elements = JSON.parse(rawJsonText);
+    nearbyShopSuggestions.value = Array.isArray(elements) ? elements : [];
+    logToScreen(`GPS Parsing Complete! Extracted options: ${JSON.stringify(nearbyShopSuggestions.value)}`);
+
+  } catch (error) {
+    logToScreen(`❌ AI Location mapping failed: ${error.message}`);
+  } finally {
+    isLocating.value = false;
+  }
+}
 
 // 🌟 CHANGE: We do NOT create a permanent global instance here anymore.
 // We will instantiate it dynamically on-demand to bypass iOS freezes.
@@ -1576,6 +1815,7 @@ div.hide-on-mobile { display: block !important; }
   cursor: pointer;
   font-size: 1rem;
   transition: background 0.2s ease;
+  min-width:  32px;
 }
 .btn-assist:hover {
   background: #517494;
@@ -1984,6 +2224,59 @@ display: grid;
     position: absolute;
     background: #225;
     right: 200px;
+}
+
+/* 🏪 Dynamic Shop/Item Suggestion Badge Tray Styling Layout */
+.shop-suggestions-tray {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  background: #0f172a;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px dashed #334155;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.suggestion-tray-title {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: bold;
+}
+
+.badge-shop-suggestion {
+  background: #312e81 !important;
+  color: #e0e7ff !important;
+  border: 1px solid #4338ca !important;
+  padding: 4px 10px !important;
+  font-size: 11px !important;
+  border-radius: 999px !important;
+  cursor: pointer;
+  width: auto !important;
+  height: auto !important;
+  transition: all 0.1s ease;
+}
+
+.badge-shop-suggestion:hover {
+  background: #4338ca !important;
+  transform: translateY(-1px);
+}
+
+.badge-shop-clear {
+  background: transparent !important;
+  border: none !important;
+  color: #64748b !important;
+  font-size: 12px !important;
+  cursor: pointer;
+  padding: 4px !important;
+  margin-left: auto;
+  width: auto !important;
+}
+
+.badge-shop-clear:hover {
+  color: #ef4444 !important;
 }
 
 /* Ensure mobile stacking rules do not distort header utilities button configurations */
