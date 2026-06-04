@@ -140,6 +140,36 @@
               </div>
             </div>
           </div>
+
+          <div class="card voice-card" style="margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <h3 style="margin: 0; font-size: 1rem;">🎙️ AI Voice Logger</h3>
+              <span v-if="isListening" class="pulse-indicator">🔴 Recording...</span>
+            </div>
+            
+            <p class="text-muted" style="font-size: 0.8rem; margin: 6px 0 12px 0;">
+              Hold or tap the button and say: <em>"Withdraw 20.99 from Eve buying a Plushie at Sainsburys"</em>
+            </p>
+
+            <div style="display: flex; gap: 10px;">
+              <button 
+                type="button" 
+                @mousedown="startVoiceCapture" 
+                @mouseup="stopVoiceCapture"
+                @touchstart.prevent="startVoiceCapture"
+                @touchend.prevent="stopVoiceCapture"
+                class="btn"
+                :class="isListening ? 'btn-danger' : 'btn-primary'"
+                style="flex: 1; padding: 12px; display: flex; align-items: center; justify-content: center; gap: 8px;"
+              >
+                {{ isListening ? '🛑 Release to Parse' : '🎤 Hold to Speak' }}
+              </button>
+            </div>
+
+            <div v-if="voiceTranscript" class="voice-transcript-preview">
+              <strong>Heard:</strong> "{{ voiceTranscript }}"
+            </div>
+          </div>
         </section>
 
         <!-- VIEW 4: LEDGER / STATEMENT DETAILED VIEW -->
@@ -376,6 +406,113 @@ const filterEndDate = ref('');
 // --- DATA ACCESS LAYER ---
 // Update your fetchSyncDatabase function to store it
 const lastSyncTime = ref(0); 
+
+const isListening = ref(false);
+const voiceTranscript = ref('');
+let recognition = null;
+
+// Initialize Web Speech API
+if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.lang = 'en-GB'; // or 'en-US'
+  
+  recognition.onresult = (event) => {
+    const resultText = event.results[0][0].transcript;
+    voiceTranscript.value = resultText;
+    parseTranscriptWithAI(resultText);
+  };
+
+  recognition.onerror = (err) => {
+    console.error("Speech Recognition Error:", err);
+    isListening.value = false;
+  };
+
+  recognition.onend = () => {
+    isListening.value = false;
+  };
+}
+
+function startVoiceCapture() {
+  if (!recognition) {
+    alert("Voice recognition is not supported on this browser/device profile.");
+    return;
+  }
+  voiceTranscript.value = '';
+  isListening.value = true;
+  recognition.start();
+}
+
+function stopVoiceCapture() {
+  if (recognition && isListening.value) {
+    recognition.stop();
+    isListening.value = false;
+  }
+}
+
+// 🧠 THE AI PARSING ENGINE (Calling Gemini / LLM API)
+async function parseTranscriptWithAI(text) {
+  isLoading.value = true; // Turn on global loading spinner overlay
+  
+  // Replace this placeholder string with your real API key or proxy endpoint
+  const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE"; 
+  const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+  // Dynamically feed the system current known context parameters so it maps exact child matches!
+  const knownChildren = children.value.map(c => `name: "${c.name}", id: "${c.id}"`).join(' | ');
+
+  const prompt = `
+    You are an expert parsing assistant for a kids allowance app ledger.
+    Analyze this spoken text sentence: "${text}"
+    
+    Extract the attributes into a valid JSON object matching these specific keys:
+    - actionType: Must be exactly "withdrawal" or "deposit"
+    - targetChildId: Look up the child name mentioned in the text and match it to one of these valid registered records: [ ${knownChildren} ]. If no match found, output an empty string.
+    - amount: A strict floating-point number.
+    - what: What was bought or recorded description.
+    - where: The location or store where transaction happened.
+
+    CRITICAL RULES:
+    1. Respond with ONLY the clean JSON block raw string. No markdown formatting markers (\`\`\`json), no preamble text.
+    2. Example output structure: {"actionType": "withdrawal", "targetChildId": "child-123", "amount": 14.50, "what": "Comic Book", "where": "Waterstones"}
+  `;
+
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }]
+      })
+    });
+
+    const data = await response.json();
+    const rawTextResponse = data.candidates[0].content.parts[0].text.trim();
+    
+    // Parse the returned AI structure safely
+    const parsedData = JSON.parse(rawTextResponse);
+    
+    // 🌟 AUTOMATICALLY SEED VUE FORM BINDINGS FROM AI RESULTS
+    if (parsedData.targetChildId) {
+      selectedChildId.value = parsedData.targetChildId;
+      currentScreen.value = 'ledger'; // Slide out child context view if needed
+    }
+    
+    txForm.value.type = parsedData.actionType || 'withdrawal';
+    txForm.value.amount = parsedData.amount || 0;
+    txForm.value.what = parsedData.what || '';
+    txForm.value.where = parsedData.where || '';
+
+  } catch (error) {
+    console.error("AI Parser Error:", error);
+    alert("Could not process voice query structure. Please adjust fields manually.");
+  } finally {
+    isLoading.value = false;
+  }
+}
+
 
 async function fetchSyncDatabase() {
   isLoading.value = true;
@@ -1442,6 +1579,35 @@ button.Withdraw {
      position: absolute;
     top: 47px;
     left: 110px; 
+}
+
+.voice-card {
+  background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%);
+  border: 1px solid #4338ca;
+}
+
+.voice-transcript-preview {
+  margin-top: 12px;
+  background: #1e293b;
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  border-left: 3px solid #6366f1;
+  color: #cbd5e1;
+  font-style: italic;
+}
+
+.pulse-indicator {
+  font-size: 0.8rem;
+  color: #ef4444;
+  font-weight: bold;
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.4; }
+  50% { opacity: 1; }
+  100% { opacity: 0.4; }
 }
 /* Ensure mobile stacking rules do not distort header utilities button configurations */
 @media (max-width: 600px) {
