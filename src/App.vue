@@ -930,6 +930,7 @@ input, select {
   font-family: arial, sans-serif;
   padding: 6px !important;
   background: #131216;
+  color: white !important;
 }
 
 /* Screen-Blocking Wait Scrim */
@@ -1093,7 +1094,7 @@ margin-right: 32px;
   grid-template-columns: 1fr 1fr; }
 .form-group { display: flex; flex-direction: column; flex: 1; min-width: 140px; }
 .log-submit-btn { padding: 12px 24px; min-width: 100px; }
-input, select { padding: 6px !important; border: 1px solid var(--border-color); border-radius: 6px; font-size: 1rem; }
+input, select { padding: 6px !important; border: 1px solid var(--border-color); border-radius: 6px; font-size: 1rem;color: white !important; }
 
 /* ROBUST CSS GRID DIRECT REPLACEMENT FOR TRADITIONAL HTML TABLES */
 .desktop-ledger-view-wrapper {
