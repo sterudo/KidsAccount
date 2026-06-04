@@ -8,7 +8,7 @@
 
   <h1 class="app-title"> 
     <button style="float:left;" v-if="currentScreen !== 'dashboard'" @click="backToDashboard"  class="btn btn-back-nav">⬅ Back</button> 
-    Kids Accounts  <span style="font-size:12px">v1.12</span>
+    Kids Accounts  <span style="font-size:12px">v1.13</span>
   </h1>
 
   <div id="app">
@@ -559,27 +559,32 @@ async function parseStructuralTranscriptWithAI(text) {
       })
     });
 
-    const responseData = await response.json();    
-    const cleanJsonString = responseData.candidates[0].content.parts[0].text.trim();
-    
-    // Process extracted payload values safely
-    const result = JSON.parse(cleanJsonString);
-    
-    // 🌟 SYNC PARSED DATA TO NATIVE VUE FORM FORMULAS
-    if (result.targetChildId) {
-      selectedChildId.value = result.targetChildId;
+    const responseData = await response.json();
+    if(response.ok) {    
+      const cleanJsonString = responseData.candidates[0].content.parts[0].text.trim();
       
-      // Auto-populate the specific log form object parameters
-      txForm.value.type = result.actionType || 'withdrawal';
-      txForm.value.amount = result.amount || 0;
-      txForm.value.what = result.what || '';
-      txForm.value.where = result.where || '';
+      // Process extracted payload values safely
+      const result = JSON.parse(cleanJsonString);
       
-      // Navigate cleanly straight into the ledger form view so the user can review it
-      currentScreen.value = 'ledger';
-      isVoiceModalOpen.value = false; // Hide modal on complete parsing success
+      // 🌟 SYNC PARSED DATA TO NATIVE VUE FORM FORMULAS
+      if (result.targetChildId) {
+        selectedChildId.value = result.targetChildId;
+        
+        // Auto-populate the specific log form object parameters
+        txForm.value.type = result.actionType || 'withdrawal';
+        txForm.value.amount = result.amount || 0;
+        txForm.value.what = result.what || '';
+        txForm.value.where = result.where || '';
+        
+        // Navigate cleanly straight into the ledger form view so the user can review it
+        currentScreen.value = 'ledger';
+        isVoiceModalOpen.value = false; // Hide modal on complete parsing success
+      } else {
+        alert("AI was unable to distinctly identify which child this transaction belonged to. Please adjust manually.");
+      }
     } else {
-      alert("AI was unable to distinctly identify which child this transaction belonged to. Please adjust manually.");
+      console.error("AI Parsing API Error:", responseData);
+      alert("AI Parsing Error: " + (responseData.error.message || "Unknown error occurred while parsing the spoken input."));
     }
 
   } catch (error) {
