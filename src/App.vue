@@ -8,7 +8,7 @@
 
   <h1 class="app-title"> 
     <button style="float:left;" v-if="currentScreen !== 'dashboard'" @click="backToDashboard"  class="btn btn-back-nav">⬅ Back</button> 
-    Kids Accounts  <span style="font-size:12px">v1.24</span>
+    Kids Accounts  <span style="font-size:12px">v1.25</span>
   </h1>
 
   <div id="app">
@@ -147,25 +147,24 @@
                   for a <b style="color:cyan">what</b> from <b  style="color:orange">place</b>        
                   <button  class="showExBtn" type="button" @click="toggleExamples">{{ showExamples ? 'Hide Examples' : 'Show Examples' }}</button>
                 </code>
-                <p class="blueprint-example" v-if="showExamples">
+                <div class="blueprint-example" v-if="showExamples">
                   <p style="margin-bottom: 12px"><b style="color:lime">Add</b> <b style="color:white">X.Y</b> to <b style="color:yellow">child</b> for a <b style="color:cyan">what</b></p>
                   <em style="font-size:0.9em">"<b style="color:#f66">Remove</b> <b style="color:white">20 point 99</b> from <b style="color:yellow">Jason</b> for a <b style="color:cyan">Plushie</b> from <b style="color:orange">Sainsburys</b>"</em><br>
                   <em style="font-size:0.9em">"<b style="color:lime">Add</b> <b style="color:white">10 Pounds</b> to <b style="color:yellow">Evie</b> as a <b style="color:cyan">Gift</b>"</em>
-                </p>
+                </div>
               </div>
 
               <div class="voice-status-container" >
                 <div v-if="isListening" class="pulse-ring"></div>
-                <p class="action-hint-text">
+                <div class="action-hint-text" style="margin-top: 8px;">
                   {{ isListening ? 'Tap once to STOP' : 'Tap once,' }}
-                  <p style="font-weight: normal;">
-                  {{ isListening ? '' : ' speak clearly, ' }}
-                  </p>
-                    <p style="font-weight: bold;">
-                  {{ isListening ? '' : 'then tap stop' }}
-                  
-                  </p>
-                </p>
+                  <span style="font-weight: normal; display: inline;">
+                    {{ isListening ? '' : ' speak clearly, ' }}
+                  </span>
+                  <span style="font-weight: bold; display: inline;">
+                    {{ isListening ? '' : 'then tap stop' }}
+                  </span>
+                </div>
 
                 <button 
                 type="button"
@@ -523,7 +522,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import ImageLightbox from '@/components/ImageLightbox.vue';
 import AddChildSettings from '@/components/AddChildSettings.vue';
 import AddUserSettings from '@/components/AddUserSettings.vue';
@@ -575,6 +574,7 @@ const isListening = ref(false);
 const voiceTranscript = ref('');
 const showIfProblem = ref(false); // Flag to show transcript review only when needed
 const voiceLogs = ref([]); // 🌟 NEW: Array to hold on-screen telemetry logs
+const systemLogs  = ref([]);
 const showExamples = ref((window.localStorage.getItem('showExamples') ?  ((window.localStorage.getItem('showExamples') === 'show') ? true : false) : true) );
 const cloudGeminiApiKey = ref('');
 const dashError = ref('');
@@ -592,6 +592,41 @@ const activePreviewUrl = ref('');
 // 💡 HELP CARD VISIBILITY CONTROLLER STATES
 const hideHelpDashboard = ref(localStorage.getItem('hide_help_dashboard') === 'true');
 const hideHelpDetail = ref(localStorage.getItem('hide_help_detail') === 'true');
+
+// 🔄 BROWSER & ANDROID BACK BUTTON INTERCEPT ROUTER
+watch(currentScreen, (newScreen) => {
+  if (newScreen === 'dashboard') {
+    // If we are back on the main dashboard, ensure the history stack doesn't have stray deep views
+    if (window.history.state?.screen && window.history.state.screen !== 'dashboard') {
+      // Clean baseline state
+    }
+  } else {
+    // 🌟 CRITICAL: When entering ANY sub-screen, push a state marker onto the browser history stack.
+    // This tricks the browser/Android into enabling the back button instead of leaving the app.
+    window.history.pushState({ screen: newScreen }, '');
+    appendScreenLog(`History state pushed for screen: ${newScreen}`, systemLogs);
+  }
+});
+
+// Handler that triggers when a user hits the browser back or Android physical back button
+function handleHardwareBackButton(event) {
+  // If the user was on a sub-screen and pressed back, event.state will become null or change
+  if (currentScreen.value !== 'dashboard') {
+    // Intercept the navigation event natively!
+    event.preventDefault(); 
+    
+    appendScreenLog(`Hardware Back Button detected. Routing screen from '${currentScreen.value}' to 'dashboard'`, systemLogs);
+    
+    // Execute your safe dashboard redirect routine
+    backToDashboard();
+  }
+}
+
+
+onUnmounted(() => {
+  // Clean up global environment triggers to prevent memory leaks
+  window.removeEventListener('popstate', handleHardwareBackButton);
+});
 
 function toggleHelpState(targetView) {
   if (targetView === 'dashboard') {
@@ -1212,6 +1247,9 @@ function backToDashboard() {
   selectedChildId.value = null;
   txForm.value.receiptImageBase64 = '';
   currentScreen.value = 'dashboard';
+  if (window.history.state?.screen && window.history.state.screen !== 'dashboard') {
+    window.history.replaceState({ screen: 'dashboard' }, '');
+  }
   window.scrollTo(0,0);
 }
 
@@ -1245,6 +1283,12 @@ function saveUserPreference() {
 }
 
 onMounted(() => {
+ // Establish a baseline layout state for the dashboard on initial application cold launch
+  window.history.replaceState({ screen: 'dashboard' }, '');
+
+  // Bind the global window navigation listener popstate rule
+  window.addEventListener('popstate', handleHardwareBackButton);
+
   // Device fingerprint verification logic
   let fp = localStorage.getItem('pocket_money_fingerprint');
   if (!fp) {
