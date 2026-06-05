@@ -176,6 +176,7 @@ select#global-user {
     max-width: 1200px;
     margin: 0 auto;
     min-height: calc(100svh - 40px);
+    text-align: left;
 }
 
 /* THE HEADER BAR CONTAINER */
@@ -1431,8 +1432,24 @@ button.Withdraw {
 }
 
 
+.isDisabled {
+    opacity: 0.2;
+    cursor: not-allowed;
+}
 
 
+.offline-banner {
+    background: #5f0707;
+    border-bottom: 2px solid red;
+    padding: 16px;
+    font-size: 0.85em;
+    text-align:left;
+}
+
+.offline {
+    background: #5f0707 !important;
+
+}
 
 /* Ensure mobile stacking rules do not distort header utilities button configurations */
 

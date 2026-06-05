@@ -75,3 +75,11 @@ export function appendScreenLog(msg, systemLogRef = null) {
     }
   }
 }
+
+// Helper to transform web link to bypass preview limits
+export function getRawImageUrl(driveUrl) {
+  if (!driveUrl) return '';
+  const match = driveUrl.match(/id=([^&]+)|\|\/d\/([^/]+)/);
+  const fileId = match ? (match[1] || match[2]) : null;
+  return fileId ? `https://lh3.googleusercontent.com/u/0/d/${fileId}` : driveUrl;
+}

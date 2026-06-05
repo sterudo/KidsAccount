@@ -6,9 +6,9 @@
     </div>
   </div>
 
-  <h1 class="app-title"> 
+  <h1 class="app-title"  :class="{ 'offline': !isOnline }"> 
     <button style="float:left;position: absolute; left: 0px;" v-if="currentScreen !== 'dashboard'" @click="backToDashboard"  class="btn btn-back-nav">⬅ Back</button> 
-    <span style="white-space: nowrap;" class="h1s">Kids Accounts  <span class="versionno">v0.28</span></span>      
+    <span style="white-space: nowrap;" class="h1s">Kids Accounts  <span class="versionno">v{{ appVersion }}</span></span>      
 
      <div class="user-selector-and-refresh-group"> 
 
@@ -24,18 +24,21 @@
       <ActionMenu 
       :debug-mode="isDebugEnabled"
       :show-help="isSpeechHelpVisible"
+      :isOnline="isOnline"
       @navigate="(screen) => currentScreen = screen"
       @refresh="fetchSyncDatabase"
       @toggle-debug="isDebugEnabled = !isDebugEnabled"
+      @about="isAboutOpen = true"
       @toggle-help="isSpeechHelpVisible = !isSpeechHelpVisible"
     />
       <button 
         type="button" 
         @click="isAboutOpen = true" 
         class="btn-about-trigger" 
-        title="Application Information"
+        :class="{ 'device-is-offline': !isOnline }"
+        :title="isOnline ? 'Online - Application Info' : 'Offline Mode Active'"
       >
-        🤑
+        {{ isOnline ? '🤑' : '😢' }}
       </button>
  
     </div>
@@ -69,6 +72,21 @@
             </div>  
         </div>
 
+        <div v-else style="width:100%">
+          <div v-if="!isOnline" style="width:100%">
+
+            <div class="offline-banner">
+              <span class="offline-icon">⚠️</span> <b style="    font-size: 1rem;    font-weight: bold;">Offline Mode</b><br>
+                 Data might not be up-to-date. AI features are suspended (Dictation, Camera, Location). 
+                 <p style="    font-size: 1rem;
+    font-weight: bold;">Transaction can be logged and will automatically by synced when back online.</p>
+
+            </div>
+          </div>
+
+
+        </div>
+
        </header>
 
       <main class="app-container">
@@ -91,6 +109,16 @@
           @submit="handleCreateUser"
           @delete-user="handleDeleteUser"
         />
+
+   
+        <BackupSettings 
+         v-if="currentScreen === 'backupSettings'"
+          :api-url="SHEET_API_URL"
+          :fingerprint="deviceFingerprint"
+          :is-online="isOnline"
+          @trigger-refresh="fetchSyncDatabase(false)" 
+        />
+
 
         <!-- VIEW 3: DASHBOARD (One Kid Per Row Layout) -->
         <section v-if="currentScreen === 'dashboard'" class="screen" style="margin-top: 20px;">
@@ -129,7 +157,7 @@
                   <img :src="(child.name == 'Eve') ? 'eve250.png' : ((child.name == 'Jason') ? 'jason250.png' : 'default.png')" class="child-avatar" width="60" height="60" style="flex-basis:1;margin-right:10px;" />
                   <div class="child-row-info" style="flex-basis: 100%;  text-align: left;">                    
                     <h3 :class="(child.name == 'Eve') ? 'girl': ((child.name == 'Jason') ? 'boy': 'tester')">{{ child.name }} </h3>
-                    <span class="allowance-label" style="text-align:left;"><span style="font-size: 12px;" class="allowance-label-text">Allowance:</span> {{ formatCurrency(child.weeklyAllowance) }}/wk</span>
+                    <span class="allowance-label" style="text-align:left;"><span style="font-size: 12px;" class="allowance-label-text">Allowance:</span> {{ formatCurrency(child.weeklyallowance) }}/wk</span>
                   </div>
                   <div class="child-row-balance" :class="calculateBalance(child.id) >= 0 ? 'pos-dark-dark' : 'neg-dark-dark'">
                     {{ formatCurrency(calculateBalance(child.id)) }}
@@ -145,7 +173,7 @@
               </div>
             </div>
           </div>
-           <div class="voice-modal-card" @click.stop>
+           <div v-if="isOnline" class="voice-modal-card" @click.stop>
   
               <div class="voice-blueprint-box" v-if="isSpeechHelpVisible">
                 <p class="blueprint-title">🗣️ Spoken Sentence Guide:</p>
@@ -265,7 +293,9 @@
                     @focus="activeHelper = 'what'"
                     @blur="closeHelperDeferred"   
                   />
-                  <button type="button" @click.prevent.stop="triggerCameraCapture" class="btn btn-assist" style="margin-right: 4px;" title="Scan Item with AI Camera">📸</button>
+                  <button type="button" @click.prevent.stop="triggerCameraCapture" 
+                  :disabled="!isOnline"
+                  class="btn btn-assist" style="margin-right: 4px;" title="Scan Item with AI Camera">📸</button>
                   
                   <button 
                     type="button" 
@@ -293,7 +323,7 @@
                     <button 
                       type="button" 
                       v-for="item in aiWhatSuggestions" 
-                      :key="item" 
+                      :key="item"                       
                       @mousedown.prevent="txForm.what = item; aiWhatSuggestions = []"
                       class="badge-shop-suggestion"
                     >
@@ -329,11 +359,13 @@
                     id="tx-where"
                     v-model="txForm.where" 
                     type="text" 
+                    
                     placeholder="e.g. Corner Shop" 
                     @focus="activeHelper = 'where'"
                     @blur="closeHelperDeferred"  
                   />
-                  <button type="button" @click.prevent.stop="fetchSmartLocationList" :disabled="isLocating" class="btn btn-assist" style="margin-right: 4px;" title="Find Nearby Shops via AI GPS">
+                  <button type="button" @click.prevent.stop="fetchSmartLocationList" :disabled="!isOnline || isLocating"
+                   class="btn btn-assist" style="margin-right: 4px;" title="Find Nearby Shops via AI GPS">
                     {{ isLocating ? '⏳' : '📍' }}
                   </button>
                   
@@ -457,11 +489,11 @@
                     <div class="text-left">{{ formatDate(tx.date) }}</div>
                     <div class="text-left"><b>🛒</b> {{ tx.what }}
                       <button 
-                        v-if="tx.fileUrl && tx.fileUrl.startsWith('http')" 
+                        v-if="isOnline && tx.fileurl && tx.fileurl.startsWith('http')" 
                         type="button" 
-                        @click.stop="openImagePreviewModal(tx.fileUrl)" 
+                        @click.stop="openImagePreviewModal(getRawImageUrl(tx.fileurl))" 
                         class="btn-image-thumbnail-trigger"
-                        title="View Receipt inside App"
+                        :title="`View Receipt inside App ${tx.fileurl}`"
                       >
                         📸
                       </button>
@@ -507,7 +539,7 @@
                 <div>-</div>
                 <div><strong>Starting Balance</strong></div>
                 <div class="where">-</div>
-                <div class="text-right" :class="selectedChild.startAmount >= 0 ? 'pos-dark-text' : 'neg-text'">{{ formatCurrency(selectedChild.startAmount) }}</div>
+                <div class="text-right" :class="selectedChild.startamount >= 0 ? 'pos-dark-text' : 'neg-text'">{{ formatCurrency(selectedChild.startamount) }}</div>
                 <template v-if="showMetaFields">
                   <div>-</div><div>-</div><div>-</div>
                 </template>
@@ -529,7 +561,9 @@
   />
 
 
-  <AboutDialog :is-open="isAboutOpen" @close="isAboutOpen = false" />
+  <AboutDialog :is-open="isAboutOpen" :app-version="appVersion" @close="isAboutOpen = false" />
+
+  
 </template>
 
 <script setup>
@@ -538,15 +572,17 @@ import ImageLightbox from '@/components/ImageLightbox.vue';
 import AddChildSettings from '@/components/AddChildSettings.vue';
 import AddUserSettings from '@/components/AddUserSettings.vue';
 import AboutDialog from '@/components/AboutDialog.vue';
+import BackupSettings from '@/components/BackupSettings.vue';
 import { 
   formatCurrency, 
   formatDate, 
   formatDateMobile,
   generateDeviceFingerprint, 
-  appendScreenLog 
+  appendScreenLog,
+  getRawImageUrl
 } from './utils/helpers';
 import ActionMenu from '@/components/ActionMenu.vue';
-
+const appVersion = ref('0.31');
 // Assure you have matching flags linked to control toggles:
 const isDebugEnabled = ref(false); // Controls local screen log views
 const debugMode = ref(false);
@@ -621,6 +657,118 @@ const activePreviewUrl = ref('');
 const hideHelpDashboard = ref(localStorage.getItem('hide_help_dashboard') === 'true');
 const hideHelpDetail = ref(localStorage.getItem('hide_help_detail') === 'true');
 
+// Inside src/App.vue <script setup>
+const isOnline = ref(navigator.onLine);
+const pendingQueue = ref([]);
+
+// Setup explicit LocalStorage keys
+const OUTBOX_STORAGE_KEY = "vault_pending_outbox";
+const DATA_STORAGE_KEY = "vault_cached_dataset";
+
+onMounted(() => {
+  // Device fingerprint verification logic
+  let fp = localStorage.getItem('pocket_money_fingerprint');
+  if (!fp) {
+    fp = `fp-${Math.random().toString(36).substring(2, 7)}`;
+    localStorage.setItem('pocket_money_fingerprint', fp);
+  }
+  deviceFingerprint.value = fp;
+  console.log("Your Device Authorization Fingerprint is:", fp);
+  
+  // 🌟 ENHANCEMENT 1: Recall saved user preference from localstorage
+  const savedUser = localStorage.getItem('pocket_money_active_user');
+  if (savedUser && users.value.includes(savedUser)) {
+    currentUser.value = savedUser;
+  } else {
+    currentUser.value = 'Dad'; // Default fallback
+  }
+
+  // 1. Instantly pull and mount whatever dataset resides in local storage
+ initializeAppCache();
+  initializeOfflineQueue();
+  
+  // Initial active ping check
+  checkNetworkConnectivity();
+
+  // Bind native browser visibility and connectivity triggers
+  window.addEventListener('online', checkNetworkConnectivity);
+  window.addEventListener('offline', () => {
+    isOnline.value = false;
+    logToScreen("📉 Device transitioned offline. Restricted read/write safety rules applied.");
+  });
+
+  // Recheck internet connection every 15 seconds to catch dropouts early
+  const networkCheckInterval = setInterval(checkNetworkConnectivity, 15000);
+
+  // 2. Perform an initial sync. If authenticated, this fills the background. If unauthenticated, it triggers a foreground validation check.
+  fetchSyncDatabase(isAuthenticated.value);
+
+  // 3. Bind silent background event hooks
+  window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      triggerBackgroundRefresh();
+    }
+  });
+
+  window.addEventListener('focus', triggerBackgroundRefresh);
+
+onUnmounted(() => {
+  // Clean up global environment triggers to prevent memory leaks
+  window.removeEventListener('popstate', handleHardwareBackButton);
+    clearInterval(networkCheckInterval);
+    window.removeEventListener('online', checkNetworkConnectivity);
+    window.removeEventListener('offline', () => isOnline.value = false);
+  });
+
+   // Establish a baseline layout state for the dashboard on initial application cold launch
+  window.history.replaceState({ screen: 'dashboard' }, '');
+
+  // Bind the global window navigation listener popstate rule
+  window.addEventListener('popstate', handleHardwareBackButton);
+});
+
+
+/**
+ * Validates actual internet connectivity by making a lightweight HEAD fetch request
+ */
+async function checkNetworkConnectivity() {
+  if (!navigator.onLine) {
+    isOnline.value = false;
+    return;
+  }
+  try {
+    // 🌟 FIX: Ping a reliable micro-asset that allows global CORS requests (like standard cloud favicons)
+    // alternative: fetch(`${SHEET_API_URL}?action=ping`, { method: 'GET', mode: 'cors' })
+    const response = await fetch('https://www.google.com/favicon.ico', { 
+      method: 'HEAD', 
+      mode: 'no-cors', // Prevents cross-origin browser blocking
+      cache: 'no-store' 
+    });
+    
+    if (!isOnline.value) {
+      isOnline.value = true;
+      logToScreen("🌐 Internet access restored! Initiating outbox queue flush...");
+      flushPendingQueue();
+    }
+  } catch (err) {
+    // Router connection exists, but actual internet access is dead
+    isOnline.value = false;
+  }
+}
+/**
+ * Initializes the outbox cache queue on app cold startup
+ */
+function initializeOfflineQueue() {
+  const savedQueue = localStorage.getItem(OUTBOX_STORAGE_KEY);
+  if (savedQueue) {
+    try {
+      pendingQueue.value = JSON.parse(savedQueue);
+    } catch (e) {
+      pendingQueue.value = [];
+    }
+  }
+}
+
 // 🔄 BROWSER & ANDROID BACK BUTTON INTERCEPT ROUTER
 watch(currentScreen, (newScreen) => {
   if (newScreen === 'dashboard') {
@@ -670,47 +818,49 @@ console.log("initializeAppCache");
 /**
  * Core synchronization pipeline with optional background capability
  */
+// Add a tracker ref for the last timestamp inside <script setup>
+const lastSyncTimestamp = ref(0);
+const SYNC_COOLDOWN_MS = 30000; // 30 seconds protection window
+
 async function fetchSyncDatabase(isBackground = false) {
-  // Only trigger the annoying wait-scrim overlay if explicit interaction demands it
+  // 🌟 PROTECTION LAYER: Prevent rapid-fire 429 bursts if background sync is called too frequently
+  const now = Date.now();
+  if (isBackground && (now - lastSyncTimestamp.value < SYNC_COOLDOWN_MS)) {
+    console.log("📶 Background sync skipped: Cooldown active to prevent Google 429 throttling.");
+    return; 
+  }
+
   if (!isBackground) {
     isLoading.value = true;
   }
 
   try {
-    // Append the hardware security token to every outward request parameter row
     const syncUrl = `${SHEET_API_URL}?fingerprint=${encodeURIComponent(deviceFingerprint.value)}`;
-    
     const response = await fetch(syncUrl);
     const data = await response.json();
 
-    // 🌟 403 SECURITY EVICITON: Intercept rejection responses
     if (data.status === 403 || data.error === "Unauthorized") {
-      logToScreen("❌ 403 Unauthorized detected! Device token revoked by sheet server.");
       purgeLocalStorageAuth();
       return;
     }
 
-    // Update active reactive state references
     if (data.children) children.value = data.children;
     if (data.transactions) transactions.value = data.transactions;
     if (data.users) users.value = data.users;
-    if (data.config) systemConfig.value = data.config; // Config elements safely delivered
+    if (data.config) systemConfig.value = data.config;
 
-    // Commit the newly synchronized dataset block to cache memory storage
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    // Save success timestamp
+    lastSyncTimestamp.value = Date.now();
+
+    localStorage.setItem("vault_cached_dataset", JSON.stringify({
       children: children.value,
       transactions: transactions.value,
       users: users.value,
       config: systemConfig.value
     }));
 
-    
-    isAuthenticated.value = true;
-    logToScreen("🔄 Background sync complete. Master database updated.", true);
-    
   } catch (err) {
     console.error("Network sync warning:", err);
-    logToScreen(`📶 Background sync failed (Offline Mode active): ${err.message}`);
   } finally {
     isLoading.value = false;
   }
@@ -766,10 +916,8 @@ function handleHardwareBackButton(event) {
 }
 
 
-onUnmounted(() => {
-  // Clean up global environment triggers to prevent memory leaks
-  window.removeEventListener('popstate', handleHardwareBackButton);
-});
+
+
 
 function toggleHelpState(targetView) {
   if (targetView === 'dashboard') {
@@ -1360,46 +1508,7 @@ function saveUserPreference() {
   localStorage.setItem('pocket_money_active_user', currentUser.value);
 }
 
-onMounted(() => {
-  // Device fingerprint verification logic
-  let fp = localStorage.getItem('pocket_money_fingerprint');
-  if (!fp) {
-    fp = `fp-${Math.random().toString(36).substring(2, 7)}`;
-    localStorage.setItem('pocket_money_fingerprint', fp);
-  }
-  deviceFingerprint.value = fp;
-  console.log("Your Device Authorization Fingerprint is:", fp);
-  
-  // 🌟 ENHANCEMENT 1: Recall saved user preference from localstorage
-  const savedUser = localStorage.getItem('pocket_money_active_user');
-  if (savedUser && users.value.includes(savedUser)) {
-    currentUser.value = savedUser;
-  } else {
-    currentUser.value = 'Dad'; // Default fallback
-  }
 
-  // 1. Instantly pull and mount whatever dataset resides in local storage
-  initializeAppCache();
-
-  console.log("onMounted " + isAuthenticated.value)
-  // 2. Perform an initial sync. If authenticated, this fills the background. If unauthenticated, it triggers a foreground validation check.
-  fetchSyncDatabase(isAuthenticated.value);
-
-  // 3. Bind silent background event hooks
-  window.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-      triggerBackgroundRefresh();
-    }
-  });
-
-  window.addEventListener('focus', triggerBackgroundRefresh);
-
-   // Establish a baseline layout state for the dashboard on initial application cold launch
-  window.history.replaceState({ screen: 'dashboard' }, '');
-
-  // Bind the global window navigation listener popstate rule
-  window.addEventListener('popstate', handleHardwareBackButton);
-});
 
 const selectedChild = computed(() => children.value.find(c => c.id === selectedChildId.value || String(c.id) === String(selectedChildId.value)));
 
@@ -1513,7 +1622,7 @@ function isUserDeletable(userName) {
 
 function isLastTransaction(txId) {
   const childTx = baseFilteredTransactions.value;
-  return childTx.length > 0 && childTx[0].id === txId;
+  return isOnline.value &&  (childTx.length > 0 && childTx[0].id === txId);
 }
 
 function handleRowClick(tx) {
@@ -1536,6 +1645,58 @@ function handleRowClick(tx) {
   } else {
     alert("🔒 Audit Control Lock: adjustments are limited exclusively to the absolute newest ledger event.");
   }
+}
+
+async function flushPendingQueue() {
+  if (pendingQueue.value.length === 0) return;
+  
+  logToScreen(`🚀 Flushing ${pendingQueue.value.length} pending transaction(s) to the cloud spreadsheet...`);
+  
+  // Make a clone of the array to loop through sequentially
+  const queueToProcess = [...pendingQueue.value];
+  
+  for (const tx of queueToProcess) {
+    try {
+      const networkPayload = {
+        action: "addTransaction",
+        fingerprint: deviceFingerprint.value,
+        id: tx.id,
+        childId: tx.childid,
+        date: tx.date,
+        what: tx.what,
+        where: tx.where,
+        type: tx.type,
+        amount: tx.amount,
+        recordedBy: tx.recordedby,
+        utcTimestamp: tx.timestamp,
+        receiptImageBase64: ""
+      };
+
+      const response = await fetch(SHEET_API_URL, {
+        method: "POST",
+        body: JSON.stringify(networkPayload)
+      });
+      const result = await response.json();
+
+      if (result.status === "success" || result.status === 200) {
+        // Remove item from our active reactive queue array
+        pendingQueue.value = pendingQueue.value.filter(item => item.id !== tx.id);
+        localStorage.setItem(OUTBOX_STORAGE_KEY, JSON.stringify(pendingQueue.value));
+        
+        // Remove pending sync flag from active dashboard UI array lists
+        const localTx = transactions.value.find(t => t.id === tx.id);
+        if (localTx) delete localTx.isPendingSync;
+      }
+    } catch (err) {
+      console.error("Outbox flush stalled:", err);
+      logToScreen("⚠️ Outbox flush stalled. Waiting for a more stable connection connection window.");
+      return; // Stop processing loop if network drops again mid-flush
+    }
+  }
+
+  logToScreen("🎉 All offline transactions have been synchronized successfully!");
+  saveDataCacheToDisk();
+  fetchSyncDatabase(false); // Run full foreground update to refresh calculated ledger stats
 }
 
 async function saveInlineEdit(txId) {
@@ -1594,8 +1755,8 @@ async function handleCreateChild() {
       name: childForm.value.name.trim(),
       
       // If your code.gs matches explicit column keys, make sure these match your sheet header names:
-      startAmount: Number(childForm.value.startAmount) || 0,
-      weeklyAllowance: Number(childForm.value.weeklyAllowance) || 0
+      startamount: Number(childForm.value.startAmount) || 0,
+      weeklyallowance: Number(childForm.value.weeklyAllowance) || 0
     };
     
     isLoading.value = true;
@@ -1628,98 +1789,101 @@ async function handleCreateChild() {
     isLoading.value = false;
   }
 }
+
 async function handleCreateTransaction() {
   if (!txForm.value.amount || !selectedChildId.value) return;
 
-  // 1. Construct a standard lowercase payload to match your Apps Script extraction structure
   const transactionId = 'tx_' + Date.now();
   const optimisticTx = {
     id: transactionId,
-    childid: String(selectedChildId.value), // Kept lowercase to match parseSheetRecords down-streams
+    childid: String(selectedChildId.value),
     date: txForm.value.date || new Date().toISOString().split('T')[0],
     what: txForm.value.what.trim(),
     where: txForm.value.where?.trim() || '-',
-    type: txForm.value.type, // 'deposit' or 'withdrawal'
+    type: txForm.value.type,
     amount: Number(txForm.value.amount),
     recordedby: currentUser.value || 'System',
     timestamp: new Date().toISOString(),
-    fileurl: txForm.value.receiptImageBase64 ? '⌛ Uploading...' : '' // Temporary status indicator
+    fileurl: '',
+    // Mark it locally so the UI can stylize or identify it as unsynced
+    isPendingSync: !isOnline.value 
   };
 
-  // Keep a reference of the old local ledger state in case we need to roll back a network error
-  const previousTransactions = [...transactions.value];
+  // 1. Instantly update the UI feed and clear inputs
+  transactions.value.unshift(optimisticTx);
+  txForm.value = { date: txForm.value.date, what: '', where: '', type: 'withdrawal', amount: null, receiptImageBase64: "" };
 
-  try {
-    // 2. OPTIMISTIC UI UPDATE: Clear forms and inject row immediately
-    const base64ImageBackup = txForm.value.receiptImageBase64 || "";
-    txForm.value = { date: txForm.value.date, what: '', where: '', type: 'withdrawal', amount: null, receiptImageBase64: "" };
-    
-    // Push directly to top of screen feed
-    transactions.value.unshift(optimisticTx);
+  // Update master read cache
+  saveDataCacheToDisk();
 
-    // 3. PERSIST OPTIMISTIC CACHE: Update LocalStorage immediately in case they close the app right now
-    localStorage.setItem("vault_cached_dataset", JSON.stringify({
-      children: children.value,
-      transactions: transactions.value,
-      users: users.value,
-      config: systemConfig.value
-    }));
-
-    // 4. FIRE BACKWARD NETWORK TASK: Dispatch to Google Sheets API
-    // We send a camelCase structure because doPost reads childId explicitly, but has fallbacks for the rest
-    const networkPayload = {
-      action: "addTransaction",
-      fingerprint: deviceFingerprint.value,
-      id: optimisticTx.id,
-      childId: optimisticTx.childid,
-      date: optimisticTx.date,
-      what: optimisticTx.what,
-      where: optimisticTx.where,
-      type: optimisticTx.type,
-      amount: optimisticTx.amount,
-      recordedBy: optimisticTx.recordedby,
-      utcTimestamp: optimisticTx.timestamp,
-      receiptImageBase64: base64ImageBackup
-    };
-
-    // Dispatch request asynchronously
-    fetch(SHEET_API_URL, {
-      method: "POST",
-      body: JSON.stringify(networkPayload)
-    }).then(async (response) => {
-      const result = await response.json();
-      
-      if (result.status === "success") {
-        logToScreen("☁️ Transaction recorded to cloud spreadsheet successfully.");
-        // Quietly fetch database to get real Drive URL links for images and update calculated totals
-        fetchSyncDatabase(true); 
-      } else if (result.status === 403) {
-        // Handle explicit device eviction immediately
-        logToScreen("❌ Transaction rejected: Unauthorized Device.");
-        purgeLocalStorageAuth();
-      } else {
-        throw new Error(result.message || "Spreadsheet rejected save action.");
-      }
-    }).catch((networkErr) => {
-      console.error("Delayed post error:", networkErr);
-      logToScreen(`⚠️ Network sync error, rolling back local ledger: ${networkErr.message}`);
-      
-      // 5. ROLLBACK SAFETY: Revert UI array and cache instantly if network fails completely
-      transactions.value = previousTransactions;
-      localStorage.setItem("vault_cached_dataset", JSON.stringify({
-        children: children.value,
-        transactions: transactions.value,
-        users: users.value,
-        config: systemConfig.value
-      }));
-      
-      alert(`❌ Could not save transaction: ${networkErr.message}. Local view rolled back.`);
-    });
-
-  } catch (err) {
-    console.error("Local structural exception:", err);
-    transactions.value = previousTransactions;
+  // 2. SCENARIO A: If device is completely offline, intercept and queue right away
+  if (!isOnline.value) {
+    pendingQueue.value.push(optimisticTx);
+    localStorage.setItem(OUTBOX_STORAGE_KEY, JSON.stringify(pendingQueue.value));
+    logToScreen("💾 Saved transaction to offline outbox. Will sync automatically when online.");
+    return;
   }
+
+  // 3. SCENARIO B: Online dispatch path with automated fallback if request fails mid-flight
+  sendTransactionToCloud(optimisticTx);
+}
+
+/**
+ * Handles the async network post for a specific transaction
+ */
+function sendTransactionToCloud(txPayload) {
+  const networkPayload = {
+    action: "addTransaction",
+    fingerprint: deviceFingerprint.value,
+    id: txPayload.id,
+    childId: txPayload.childid,
+    date: txPayload.date,
+    what: txPayload.what,
+    where: txPayload.where,
+    type: txPayload.type,
+    amount: txPayload.amount,
+    recordedBy: txPayload.recordedby,
+    utcTimestamp: txPayload.timestamp,
+    receiptImageBase64: "" // Safe exclusion for rapid offline math operations
+  };
+
+  fetch(SHEET_API_URL, {
+    method: "POST",
+    body: JSON.stringify(networkPayload)
+    // Removed image data transmission for standard offline baseline mutations
+  })
+  .then(async (res) => {
+    const data = await res.json();
+    if (data.status === "success") {
+      // Clean up local pending visual state flag
+      const target = transactions.value.find(t => t.id === txPayload.id);
+      if (target) delete target.isPendingSync;
+      saveDataCacheToDisk();
+      fetchSyncDatabase(true); // Sync totals in background
+    } else if (data.status === 403) {
+      purgeLocalStorageAuth();
+    }
+  })
+  .catch((err) => {
+    // If the network request fails unexpectedly, transition to offline state and queue the item
+    logToScreen(`📶 Connection dropped during transmission. Moving item to outbox queue.`);
+    isOnline.value = false;
+    
+    // Inject the transaction into the pending sync processing loop array
+    txPayload.isPendingSync = true;
+    pendingQueue.value.push(txPayload);
+    localStorage.setItem(OUTBOX_STORAGE_KEY, JSON.stringify(pendingQueue.value));
+    saveDataCacheToDisk();
+  });
+}
+
+function saveDataCacheToDisk() {
+  localStorage.setItem(DATA_STORAGE_KEY, JSON.stringify({
+    children: children.value,
+    transactions: transactions.value,
+    users: users.value,
+    config: systemConfig.value
+  }));
 }
 
 async function handleDeleteLastTransaction(txId) {
@@ -1829,7 +1993,7 @@ function calculateBalance(childId) {
   const child = children.value.find(c => String(c.id).trim() === String(childId).trim());
   if (!child) return 0;
   
-  const startingVal = Number(child.startAmount || child.startamount || 0);
+  const startingVal = Number(child.startamount || 0);
   
   const net = transactions.value
     .filter(t => {

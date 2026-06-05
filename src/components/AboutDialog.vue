@@ -4,13 +4,13 @@
       <div class="modal-header">
         <div class="header-logo-group">
           <span class="about-emoji-logo">🤑</span>
-          <h3>Allowance Vault</h3>
+          <h3>Kids Accounts <span class="app-version-tag">v{{ appVersion }} (PWA)</span></h3>
         </div>
         <button type="button" @click="$emit('close')" class="btn-close-modal">✕</button>
       </div>
       
       <div class="modal-body">
-        <p class="app-version-tag">Version 2.4.0 (PWA)</p>
+        
         <p class="app-description">
           A secure, voice-driven smart ledger tracking kids' pocket money, allowances, and savings history directly connected to your private cloud spreadsheet backend.
         </p>
@@ -19,17 +19,29 @@
         
         <div class="about-meta-grid">
           <div class="meta-item">
-            <span class="meta-label">Environment:</span>
-            <span class="meta-value">Production</span>
+            <p class="meta-label">Author:</p>
+            <p class="meta-value">Stephan Rudolph (sterudo (at) gmail.com)</p>
           </div>
           <div class="meta-item">
-            <span class="meta-label">Storage Engine:</span>
-            <span class="meta-value">Google Sheets API</span>
+            <p class="meta-label">GIThub page:</p>
+            <p class="meta-value"><a href="https://github.com/sterudo/KidsAccount" target="_blank">github.com/sterudo/KidsAccount</a></p>
           </div>
           <div class="meta-item">
-            <span class="meta-label">Features:</span>
-            <span class="meta-value">Speech Synthesis, Strict MIME Checking, Offline Cache</span>
+            <p class="meta-label">Tech stack:</p>
+            <p class="meta-value">Vue.js, Tests, vite, JavaScript, HTML, CSS, PWA, Google Sheets API, Google Drive, gemini-2.5-flash</p>
           </div>
+          <div class="meta-item">
+            <p class="meta-label">Features:</p>
+            <p class="meta-value">PWA, Web, Offline mode and connectivity checker, 
+                AI features (Dictation, Camera, Location), Authentication, Responsiveness, mobile first, Backup and Restore</p>
+          </div>
+          <div class="meta-item">
+            <p class="meta-label">Version History:</p>
+            <div class="meta-value"><ul>
+                <li><strong>0.31</strong> - JSON export and import, Backup to Google Drive</li>
+                <li><strong>v0 - v0.30</strong> - PWA, Web, Offline mode and connectivity checker, AI features (Dictation, Camera, Location), Authentication, Responsiveness, mobile first</li>
+            </ul></div>
+          </div>        
         </div>
       </div>
 
@@ -44,6 +56,10 @@
 defineProps({
   isOpen: {
     type: Boolean,
+    required: true
+  },
+  appVersion: {
+    type: String,
     required: true
   }
 });
@@ -122,12 +138,13 @@ defineEmits(['close']);
 .modal-body {
   padding: 20px;
   color: #cbd5e1;
+      max-height: 50vh;
+    overflow-y: auto;
 }
 
 .app-version-tag {
   font-size: 0.8rem;
   color: #38bdf8;
-  text-transform: uppercase;
   font-weight: bold;
   letter-spacing: 0.05em;
   margin-top: 0;
@@ -154,9 +171,13 @@ defineEmits(['close']);
 }
 
 .meta-item {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.85rem;
+display: flex;
+    font-size: 0.85rem;
+    flex-direction: column;
+    width: 100%;
+    align-content: start;
+    align-items: start;
+    align-self: start;
 }
 
 .meta-label {
@@ -164,11 +185,21 @@ defineEmits(['close']);
 }
 
 .meta-value {
-  color: #e2e8f0;
-  font-weight: 500;
-  text-align: right;
-  max-width: 60%;
+    color: #e2e8f0;
+    font-weight: normal;
+    text-align: left;
+    max-width: 100%;
+    position: relative;
+    top: -6px;
+
 }
+
+div.meta-value ul {
+        margin: 0px;
+        padding: 0px;
+        padding-left: 0px;
+        list-style: none;
+    }
 
 .modal-footer {
   padding: 12px 20px;

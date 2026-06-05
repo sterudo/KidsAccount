@@ -14,11 +14,11 @@
       <div v-if="isOpen" class="menu-dropdown-card">
         <div class="menu-section-title">Navigation & Profiles</div>
         
-        <button type="button" class="menu-item" @click="triggerAction('addUserSettings')">
+        <button :disabled="!isOnline" type="button" class="menu-item" :class="{ 'isDisabled': !isOnline }" @click="triggerAction('addUserSettings')">
           <span class="menu-item-icon">👥</span> Add / Manage Parents
         </button>
         
-        <button type="button" class="menu-item" @click="triggerAction('addChildSettings')">
+        <button :disabled="!isOnline" type="button" class="menu-item" :class="{ 'isDisabled': !isOnline }" @click="triggerAction('addChildSettings')">
           <span class="menu-item-icon">👦</span> Add New Child Profile
         </button>
 
@@ -26,8 +26,12 @@
         
         <div class="menu-section-title">System Utilities</div>
 
-        <button type="button" class="menu-item" @click="triggerAction('refreshDatabase')">
+        <button :disabled="!isOnline" type="button" class="menu-item" :class="{ 'isDisabled': !isOnline }" @click="triggerAction('refreshDatabase')">
           <span class="menu-item-icon">🔄</span> Refresh / Sync 
+        </button>
+        <button :disabled="!isOnline" type="button" class="menu-item" :class="{ 'isDisabled': !isOnline }" 
+        @click="triggerAction('backupSettings')">
+          <span class="menu-item-icon">💾</span> Backup & Restore
         </button>
 
         <button type="button" class="menu-item" @click="triggerAction('toggleHelp')">
@@ -41,6 +45,10 @@
           @click="triggerAction('toggleDebug')"
         >
           <span class="menu-item-icon">⚙️</span> Debug Console: {{ debugMode ? 'ON' : 'OFF' }}
+        </button>
+
+        <button type="button" class="menu-item" @click="triggerAction('aboutDialog')">
+           <span class="menu-item-icon">ℹ️</span> About This App         
         </button>
       </div>
     </transition>
@@ -58,7 +66,11 @@ defineProps({
   showHelp: {
     type: Boolean,
     default: false
-  }
+  },
+  isOnline: {
+    type: Boolean,
+    default: false
+  },
 });
 
 const emit = defineEmits(['navigate', 'refresh', 'toggle-debug', 'toggle-help']);
@@ -82,8 +94,12 @@ function triggerAction(actionType) {
     emit('refresh');
   } else if (actionType === 'toggleDebug') {
     emit('toggle-debug');
+  } else if (actionType === 'backupSettings') {
+    emit('navigate', 'backupSettings');
   } else if (actionType === 'toggleHelp') {
     emit('toggle-help');
+  } else if (actionType === 'aboutDialog') {
+    emit('about');
   }
 }
 

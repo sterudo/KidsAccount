@@ -127,9 +127,20 @@ function doPost(e) {
 
       if (payload.receiptImageBase64 && payload.receiptImageBase64.trim().length > 0) {
         try {
-          const folderName = "KidsApp_Receipts";
-          let folders = DriveApp.getFoldersByName(folderName);
-          let folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+          // 🌟 OPTIMIZATION: Use your folder's direct ID instead of searching by text name every time
+          // You can find this ID string in your browser URL bar when opening the folder in Drive.
+          const TARGET_FOLDER_ID = "YOUR_EXACT_FOLDER_ID_STRING_HERE"; 
+          let folder;
+          
+          try {
+            folder = DriveApp.getFolderById(TARGET_FOLDER_ID);
+          } catch(folderMissing) {
+            // Fallback: create it if it doesn't exist yet
+            const folderName = "KidsApp_Receipts";
+            let folders = DriveApp.getFoldersByName(folderName);
+            folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+            Logger.log("Folder Created. Note down ID for optimization: " + folder.getId());
+          }
 
           const decodedBlob = Utilities.newBlob(
             Utilities.base64Decode(payload.receiptImageBase64), 
@@ -145,7 +156,6 @@ function doPost(e) {
           fileUrl = "Upload Error: " + driveErr.toString();
         }
       }
-
       const txHeaders = txSheet.getDataRange().getValues()[0].map(h => String(h).toLowerCase().trim());
       let newRow = new Array(txHeaders.length).fill(""); 
 
@@ -263,6 +273,95 @@ function doPost(e) {
       result = { status: "success", message: "User profile removed cleanly." };
     }
     
+    // --- UTILITY 1: CORE DATABASE EXPORT ENGINE ---
+    if (action === "exportBackup") {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      const allSheets = ss.getSheets();
+      const backupPayload = {
+        version: "2.5.0",
+        timestamp: new Date().toISOString(),
+        spreadsheetId: ss.getId(),
+        data: {}
+      };
+
+      // Extract every single cell row from all existing tabs automatically
+      allSheets.forEach(sheet => {
+        const sheetName = sheet.getName();
+        const range = sheet.getDataRange();
+        const values = range.getValues();
+        backupPayload.data[sheetName] = values;
+      });
+
+      // Scenario A: If requested to save directly to Google Drive as an automated backup file
+      if (payload.target === "drive") {
+        const folderName = "KidsApp_Backups";
+        let folders = DriveApp.getFoldersByName(folderName);
+        let folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+        
+        const fileName = "vault_backup_" + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd_HHmmss") + ".json";
+        const file = folder.createFile(fileName, JSON.stringify(backupPayload, null, 2), "application/json");
+        
+        result = { status: "success", message: "Backup successfully compiled and saved to Drive folder: " + fileName };
+      } else {
+        // Scenario B: Return raw JSON object back to client browser for local disk download
+        return ContentService.createTextOutput(JSON.stringify({ status: "success", database: backupPayload }))
+                            .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // --- UTILITY 2: CORE STRUCTURAL IMPORT/RESTORE ENGINE ---
+    else if (action === "importRestore") {
+      const importData = payload.database;
+      if (!importData || !importData.data) throw new Error("Invalid or corrupted backup payload signature matrix.");
+
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      
+      // 🌟 STRICT SCHEMA VALIDATOR: Define baseline expected architecture tracking arrays
+      const requiredSchema = {
+        "children": ["id", "name", "startamount", "weeklyallowance"],
+        "transactions": ["id", "childid", "date", "what", "where", "type", "amount", "recordedby"],
+        "users": ["id"],
+        "config": [],
+        "authorized_devices": []
+      };
+
+      // Run Additive verification checks
+      Object.keys(requiredSchema).forEach(tabName => {
+        // 1. Verify Tab existence
+        if (!importData.data[tabName]) {
+          throw new Error("Validation Failure: Missing required structural sheet tab: '" + tabName + "'");
+        }
+        
+        // 2. Verify mandatory column headers are still present inside target arrays
+        const rows = importData.data[tabName];
+        if (rows.length > 0 && requiredSchema[tabName].length > 0) {
+          const fileHeaders = rows[0].map(h => String(h).toLowerCase().trim());
+          requiredSchema[tabName].forEach(col => {
+            if (fileHeaders.indexOf(col) === -1) {
+              throw new Error("Compatibility Error: Tab '" + tabName + "' is missing mandatory tracking column: '" + col + "'");
+            }
+          });
+        }
+      });
+
+      // Schema verification passed cleanly! Proceed with wiping and overwrite operation.
+      Object.keys(importData.data).forEach(tabName => {
+        let targetSheet = ss.getSheetByName(tabName);
+        if (!targetSheet) {
+          targetSheet = ss.insertSheet(tabName);
+        }
+        
+        targetSheet.clear(); // Wipe the current cells cleanly
+        const gridRows = importData.data[tabName];
+        
+        if (gridRows.length > 0) {
+          // Re-write matrix safely back onto the target sheet cells layout
+          targetSheet.getRange(1, 1, gridRows.length, gridRows[0].length).setValues(gridRows);
+        }
+      });
+
+      result = { status: "success", message: "Database restore completed. Structural schema verified, synced, and active." };
+    }
   } catch (err) {
     result = { status: "error", message: err.toString() };
   }
