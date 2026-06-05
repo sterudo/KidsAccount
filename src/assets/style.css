@@ -1451,6 +1451,32 @@ button.Withdraw {
 
 }
 
+
+
+
+.connection-highlight {
+  border: 1px solid #38bdf8 !important;
+  background-color: #0f172a !important;
+}
+
+.immutable-lock-style {
+  opacity: 0.45 !important;
+  background-color: #334155 !important;
+  color: #94a3b8 !important;
+  cursor: not-allowed !important;
+  border: none !important;
+  text-decoration: line-through;
+}
+
+.dynamic-recipient-wrapper {
+  animation: slideDownFade 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideDownFade {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* Ensure mobile stacking rules do not distort header utilities button configurations */
 
 @media (max-width: 600px) {

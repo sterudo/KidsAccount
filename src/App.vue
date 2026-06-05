@@ -276,9 +276,24 @@
 
               <div class="form-group">
                 <label for="tx-type">Type</label>
-                <select id="tx-type" v-model="txForm.type" style="max-width:150px;">
-                  <option value="withdrawal">Withdrawal (-)</option>
-                  <option value="deposit">Deposit (+)</option>
+               <select v-model="txForm.type" class="form-input" style="width:min-content;">
+                <option value="withdrawal">Withdrawal (-)</option>
+                <option value="deposit">Deposit (+)</option>
+                <option value="transfer">Send to child (>)</option>
+              </select>
+              </div>
+
+              <div v-if="txForm.type === 'transfer'" class="form-group dynamic-recipient-wrapper" style="grid-column: 1 / 3">
+                <label>Recipient Child</label>
+                <select v-model="txForm.recipientChildId" class="form-input">
+                  <option value="" disabled>-- Select Recipient --</option>
+                  <option 
+                    v-for="child in children.filter(c => String(c.id) !== String(selectedChildId))" 
+                    :key="child.id" 
+                    :value="child.id"
+                  >
+                    {{ child.name }} (Current Bal: ${{ calculateBalance(child.id).toFixed(2) }})
+                  </option>
                 </select>
               </div>
                         
@@ -405,9 +420,13 @@
                 <label for="tx-amount">Amount (£)</label>
                 <input id="tx-amount" v-model.number="txForm.amount" style="font-size:32px;height:55px;box-sizing: border-box;" type="number" step="0.01" min="0.01" required />
               </div>
-              <button type="submit " class="btn btn-primary log-submit-btn  " :class="{ 'Deposit': txForm.type === 'deposit', 'Withdraw': txForm.type === 'withdrawal' }"
-              style="font-size:24px;height:55px;box-sizing: border-box;display: flex !important;  place-content: center;  text-shadow: 1px 1px 3px black;" >{{ txForm.type === 'deposit' ? 'Deposit'  : 'Withdraw' }}</button>
-            </form>
+
+              <button type="button"
+               style="font-size:24px;height:55px;box-sizing: border-box;display: flex !important;  place-content: center;  text-shadow: 1px 1px 3px black;"
+              @click="handleCreateTransaction" class="btn btn-primary log-submit-btn  " :class="{ 'Deposit': txForm.type === 'deposit', 'Withdraw': txForm.type === 'withdrawal', 'Transfer': txForm.type === 'transfer' }">
+                  {{ txForm.type === 'transfer' ? 'Send' : (txForm.type === 'deposit' ? 'Deposit'  : 'Withdraw') }}
+                </button>
+              </form>
           </div>
 
           <!-- Filter & History Container -->
@@ -441,6 +460,8 @@
                     <option value="all">All</option>
                     <option value="withdrawal">Withdrawals</option>
                     <option value="deposit">Deposits</option>
+                    <option value="send">Send</option>
+                    <option value="receive">Receive</option>
                   </select>
                 </div>
               </div>
@@ -501,8 +522,8 @@
                     </div>
                     <div class="text-left where">{{ tx.where || '-' }}</div>
                     <div class="text-left where">{{ tx.type  }}</div>
-                    <div style="font-size: 16px !important;" class="text-right" :class="tx.type === 'deposit' ? 'pos-dark-text' : 'neg-text'">
-                      {{ tx.type === 'deposit' ? '+' : '-' }}{{ formatCurrency(tx.amount) }}
+                    <div style="font-size: 16px !important;" class="text-right" :class="(tx.type === 'deposit' || tx.type === 'receive')? 'pos-dark-text' : 'neg-text'">
+                      {{ ((tx.type === 'deposit' || tx.type === 'receive') ? '+' : '-') }}{{ formatCurrency(tx.amount) }}
                     </div>
                     <template v-if="showMetaFields">
                       <div class="meta-cell text-left ">{{ tx.recordedBy }}</div>
@@ -582,7 +603,7 @@ import {
   getRawImageUrl
 } from './utils/helpers';
 import ActionMenu from '@/components/ActionMenu.vue';
-const appVersion = ref('0.31');
+const appVersion = ref('0.32');
 // Assure you have matching flags linked to control toggles:
 const isDebugEnabled = ref(false); // Controls local screen log views
 const debugMode = ref(false);
@@ -610,8 +631,16 @@ const editForm = ref({ date: '', what: '', where: '', type: 'withdrawal', amount
 
 const childForm = ref({ name: '', startAmount: 0, weeklyAllowance: 0 });
 const newUserFormName = ref('');
-const txForm = ref({ date: getTodayString(), what: '', where: '', type: 'withdrawal', amount: null });
-txForm.value.receiptImageBase64 = '';
+const txForm = ref({
+  date: new Date().toISOString().split('T')[0],
+  what: '',
+  where: '',
+  type: 'withdrawal', // 'withdrawal', 'deposit', or 'transfer'
+  amount: null,
+  recipientChildId: '', // Track targeted sibling
+  receiptImageBase64 : "", // For storing captured receipt image data temporarily''
+});
+
 
 const showTranscript = ref(false);
 const filterType = ref('all');
@@ -1626,7 +1655,10 @@ function isLastTransaction(txId) {
 }
 
 function handleRowClick(tx) {
-  if (isLastTransaction(tx.id)) {
+  if(tx.type === 'send' || tx.type === 'receive' || !isOnline.value) {   
+    return;
+  }
+  if (isLastTransaction(tx.id) ) {
     if (editingTxId.value === tx.id) return;
     
     // 🌟 CLEANUP DATE TIMESTAMP: Strip any time segment so HTML5 <input type="date"> works perfectly
@@ -1789,10 +1821,119 @@ async function handleCreateChild() {
     isLoading.value = false;
   }
 }
+// Add next to your existing form states inside <script setup>
+
 
 async function handleCreateTransaction() {
   if (!txForm.value.amount || !selectedChildId.value) return;
+  
+  const senderChild = children.value.find(c => String(c.id) === String(selectedChildId.value));
+  
+  // 🌟 DISPATCH CASE A: ATOMIC DUAL TRANSFER DISPATCH ROUTE
+  if (txForm.value.type === 'transfer') {
+    if (!txForm.value.recipientChildId) {
+      alert("Please select a recipient child profile.");
+      return;
+    }
+    
+    const receiverChild = children.value.find(c => String(c.id) === String(txForm.value.recipientChildId));
+    const timestampId = Date.now();
+    const groupToken = `trsf_${timestampId}`;
+    const transferDate = txForm.value.date || new Date().toISOString().split('T')[0];
+    const transferAmount = Number(txForm.value.amount);
+    const descriptionText = txForm.value.what.trim() || 'Pocket Money Share';
+    const whereText = txForm.value.where.trim() || '-';
 
+    // Build matching Optimistic local row tracking entities
+    const optimisticSenderRow = {
+      id: `tx_send_${timestampId}`,
+      childid: String(selectedChildId.value),
+      date: transferDate,
+      what: `${descriptionText} to ${receiverChild?.name || 'Sibling'}`,
+      where: whereText,
+      type: 'send', // Immutability triggering type
+      amount: transferAmount,
+      recordedby: currentUser.value || 'System',
+      timestamp: new Date().toISOString(),
+      transfergroup: groupToken,
+      isPendingSync: !isOnline.value
+    };
+
+    const optimisticReceiverRow = {
+      id: `tx_recv_${timestampId}`,
+      childid: String(txForm.value.recipientChildId),
+      date: transferDate,
+      what: `${descriptionText} from ${senderChild?.name || 'Sibling'}`,
+      where: whereText,
+      type: 'receive', // Immutability triggering type
+      amount: transferAmount,
+      recordedby: currentUser.value || 'System',
+      timestamp: new Date().toISOString(),
+      transfergroup: groupToken,
+      isPendingSync: !isOnline.value
+    };
+
+    // Keep old list for failure safety rolls
+    const historyRollback = [...transactions.value];
+
+    // Optimistically push both transactions into view immediately
+    transactions.value.unshift(optimisticSenderRow, optimisticReceiverRow);
+    
+    // Clear forms completely
+    txForm.value = { date: transferDate, what: '', where: '', type: 'withdrawal', amount: null, recipientChildId: '' };
+    saveDataCacheToDisk(); // Update local storage index cache
+
+    // Handle offline backup queuing
+    if (!isOnline.value) {
+      pendingQueue.value.push(optimisticSenderRow, optimisticReceiverRow);
+      localStorage.setItem("vault_pending_outbox", JSON.stringify(pendingQueue.value));
+      return;
+    }
+
+    // Network request payload
+    const networkTransferPayload = {
+      action: "addTransfer",
+      fingerprint: deviceFingerprint.value,
+      transferGroup: groupToken,
+      utcTimestamp: optimisticSenderRow.timestamp,
+      date: transferDate,
+      amount: transferAmount,
+      recordedBy: currentUser.value || 'System',
+      senderId: optimisticSenderRow.id,
+      senderChildId: optimisticSenderRow.childid,
+      senderWhat: optimisticSenderRow.what,
+      receiverId: optimisticReceiverRow.id,
+      receiverChildId: optimisticReceiverRow.childid,
+      receiverWhat: optimisticReceiverRow.what,
+      where: whereText
+    };
+
+    fetch(SHEET_API_URL, {
+      method: "POST",
+      body: JSON.stringify(networkTransferPayload)
+    })
+    .then(async (res) => {
+      const data = await res.json();
+      if (data.status === "success") {
+        delete transactions.value.find(t => t.id === optimisticSenderRow.id)?.isPendingSync;
+        delete transactions.value.find(t => t.id === optimisticReceiverRow.id)?.isPendingSync;
+        saveDataCacheToDisk();
+        fetchSyncDatabase(true); // background refresh stats sync
+      } else { throw new Error(data.message); }
+    })
+    .catch((err) => {
+      logToScreen(`⚠️ Transfer failed mid-flight, rolling back: ${err.message}`);
+      transactions.value = historyRollback;
+      saveDataCacheToDisk();
+    }).finally(() => {
+      // Clear forms completely
+      txForm.value = { date: transferDate, what: '', where: '', type: 'withdrawal', amount: null, recipientChildId: '' };
+    });
+    
+    return;
+  }
+
+  // --- DISPATCH CASE B: EXISTING STANDARD TRANSACTION EXECUTION FLOW ---
   const transactionId = 'tx_' + Date.now();
   const optimisticTx = {
     id: transactionId,
@@ -1805,27 +1946,34 @@ async function handleCreateTransaction() {
     recordedby: currentUser.value || 'System',
     timestamp: new Date().toISOString(),
     fileurl: '',
-    // Mark it locally so the UI can stylize or identify it as unsynced
-    isPendingSync: !isOnline.value 
+    transfergroup: ''
   };
 
-  // 1. Instantly update the UI feed and clear inputs
+  const previousTransactions = [...transactions.value];
   transactions.value.unshift(optimisticTx);
-  txForm.value = { date: txForm.value.date, what: '', where: '', type: 'withdrawal', amount: null, receiptImageBase64: "" };
-
-  // Update master read cache
+  txForm.value = { date: txForm.value.date, what: '', where: '', type: 'withdrawal', amount: null, recipientChildId: '', receiptImageBase64: "" };
   saveDataCacheToDisk();
 
-  // 2. SCENARIO A: If device is completely offline, intercept and queue right away
   if (!isOnline.value) {
+    optimisticTx.isPendingSync = true;
     pendingQueue.value.push(optimisticTx);
-    localStorage.setItem(OUTBOX_STORAGE_KEY, JSON.stringify(pendingQueue.value));
-    logToScreen("💾 Saved transaction to offline outbox. Will sync automatically when online.");
+    localStorage.setItem("vault_pending_outbox", JSON.stringify(pendingQueue.value));
     return;
   }
 
-  // 3. SCENARIO B: Online dispatch path with automated fallback if request fails mid-flight
-  sendTransactionToCloud(optimisticTx);
+  // Live dispatch mapping (Standard)
+  fetch(SHEET_API_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      action: "addTransaction", fingerprint: deviceFingerprint.value,
+      id: optimisticTx.id, childId: optimisticTx.childid, date: optimisticTx.date,
+      what: optimisticTx.what, where: optimisticTx.where, type: optimisticTx.type,
+      amount: optimisticTx.amount, recordedBy: optimisticTx.recordedby, utcTimestamp: optimisticTx.timestamp
+    })
+  }).then(async r => {
+    const d = await r.json();
+    if (d.status === "success") fetchSyncDatabase(true);
+  }).catch(() => { transactions.value = previousTransactions; saveDataCacheToDisk(); });
 }
 
 /**
@@ -1990,22 +2138,27 @@ function closeHelperDeferred() {
 }
 
 function calculateBalance(childId) {
-  const child = children.value.find(c => String(c.id).trim() === String(childId).trim());
-  if (!child) return 0;
+  const targetChild = children.value.find(c => String(c.id) === String(childId));
+  if (!targetChild) return 0;
+
+  const initialAmount = Number(targetChild.startamount || targetChild.startAmount) || 0;
   
-  const startingVal = Number(child.startamount || 0);
-  
-  const net = transactions.value
-    .filter(t => {
-      const actualChildId = t.childid !== undefined ? t.childid : t.childId;
-      return String(actualChildId).trim() === String(childId).trim();
-    })
-    .reduce((sum, t) => {
-      const amt = Number(t.amount || 0);
-      return String(t.type).toLowerCase().trim() === 'deposit' ? sum + amt : sum - amt;
-    }, 0);
+  // Filter and reduce matching entries
+  const netLedger = transactions.value.reduce((total, tx) => {
+    if (String(tx.childid || tx.childId) !== String(childId)) return total;
     
-  return startingVal + net;
+    const type = String(tx.type).toLowerCase().trim();
+    const amount = Number(tx.amount) || 0;
+    
+    if (type === 'deposit' || type === 'receive') {
+      return total + amount;
+    } else if (type === 'withdrawal' || type === 'send') {
+      return total - amount;
+    }
+    return total;
+  }, 0);
+
+  return initialAmount + netLedger;
 }
 
 
