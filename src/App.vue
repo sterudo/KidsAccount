@@ -8,7 +8,7 @@
 
   <h1 class="app-title"> 
     <button style="float:left;" v-if="currentScreen !== 'dashboard'" @click="backToDashboard"  class="btn btn-back-nav">⬅ Back</button> 
-    Kids Accounts  <span style="font-size:12px">v1.23</span>
+    Kids Accounts  <span style="font-size:12px">v1.24</span>
   </h1>
 
   <div id="app">

@@ -1,6 +1,12 @@
 // src/utils/helpers.js
 
-export function formatCurrency(v) { return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(v); }
+export function formatCurrency(value) { 
+  let v = 0;
+  if(typeof value === 'number') {
+    v = value;
+  }
+  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(v); 
+}
 
 
 export function formatDate(dStr) {
