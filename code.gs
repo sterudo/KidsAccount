@@ -13,6 +13,7 @@ function doGet(e) {
   const txSheet = sheet.getSheetByName("transactions");
   const authSheet = sheet.getSheetByName("authorized_devices");
   const configSheet = sheet.getSheetByName("config"); // 🌟 Added configuration tab layer
+  const userSheet = sheet.getSheetByName("users")
 
   function parseSheetRecords(targetSheet) {
     if (!targetSheet) return [];
@@ -57,6 +58,17 @@ function doGet(e) {
       }
     }
   }
+
+;
+  let usersList = ["Dad", "Mum"]; // Hard fallback defaults if sheet is missing
+
+  if (userSheet) {
+    const userValues = userSheet.getDataRange().getValues();
+    // Read Column 1 (index 0) skipping the header row
+    usersList = userValues.slice(1)
+                          .map(row => String(row[0]).trim())
+                          .filter(name => name.length > 0);
+  }
   
   // Handle action parameter parameters
   const action = e && e.parameter ? e.parameter.action : "";
@@ -66,7 +78,7 @@ function doGet(e) {
       status: "success",
       children: children,
       transactions: transactions,
-      users: ["Dad", "Mum"],
+      users: usersList,
       authorizedDevices: authorizedDevices,
       geminiApiKey: geminiKey // 🌟 Sent down securely to your whitelisted devices
     };
@@ -142,9 +154,9 @@ function doPost(e) {
         
         // Fallback normalization checks to capture both lowercased and mixed casing variants coming from the app
         else if (header === "recordedby") newRow[index] = payload.recordedBy || payload.recordedby || "System";
-        else if (header === "devicefingerprint") newRow[index] = payload.fingerprint || payload.deviceFingerprint || payload.devicefingerprint || "-";
+        else if (header === "device") newRow[index] = payload.fingerprint || payload.deviceFingerprint || payload.devicefingerprint || "-";
         
-        else if (header === "utctimestamp") newRow[index] = payload.utcTimestamp || payload.utctimestamp || new Date().toISOString();
+        else if (header === "timestamp") newRow[index] = payload.utcTimestamp || payload.utctimestamp || new Date().toISOString();
         else if (header === "fileurl") newRow[index] = fileUrl; 
       });
 
@@ -224,19 +236,55 @@ function doPost(e) {
     }
     
     // --- ACTIONS LAYER 4: ADD NEW CHILD ROW PROFILE ---
-    else if (action === "addChild") {
-      const child = payload.child;
-      const childHeaders = childrenSheet.getDataRange().getValues()[0].map(h => String(h).toLowerCase().trim());
-      const newChildRow = new Array(childHeaders.length).fill("");
+    else if (payload.action === "createChild") {      
+      if (!childrenSheet) throw new Error("The 'children' sheet tab could not be found.");
       
-      childHeaders.forEach((header, index) => {
-        if (header === "id") newChildRow[index] = child.id;
-        else if (header === "name") newChildRow[index] = child.name;
-        else if (header === "startamount") newChildRow[index] = Number(child.startAmount) || 0;
-      });
+      // Extract from the JSON block variables cleanly
+      var id = payload.id;
+      var name = payload.name;
+      var startAmount = payload.startAmount;       // Ensure these variables match your payload keys
+      var weeklyAllowance = payload.weeklyAllowance; // Ensure these variables match your payload keys
       
-      childrenSheet.appendRow(newChildRow);
-      result = { status: "success", message: "New child profile appended cleanly." };
+      // Append to your columns row array layout (e.g., ID, Name, Starting Balance, Allowance)
+      childrenSheet.appendRow([id, name, startAmount, weeklyAllowance]);
+      
+      return ContentService.createTextOutput(JSON.stringify({ 
+        status: "success", 
+        message: "Child account recorded successfully." 
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    else if (payload.action === "createUser") {
+      const userSheet = sheet.getSheetByName("users");
+      if (!userSheet) throw new Error("The 'users' sheet tab could not be located.");
+      
+      const newUserName = String(payload.name).trim();
+      if (!newUserName) throw new Error("User registration name cannot be empty.");
+      
+      // Prevent duplicate user registrations
+      const existingUsers = userSheet.getDataRange().getValues().map(r => String(r[0]).trim().toLowerCase());
+      if (existingUsers.includes(newUserName.toLowerCase())) {
+        return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "User already registered." })).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      userSheet.appendRow([newUserName]);
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "User written to database sheet successfully." })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    else if (payload.action === "deleteUser") {
+      const userSheet = sheet.getSheetByName("users");
+      if (!userSheet) throw new Error("The 'users' sheet tab could not be located.");
+      
+      const targetUser = String(payload.name).trim().toLowerCase();
+      const data = userSheet.getDataRange().getValues();
+      
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][0]).trim().toLowerCase() === targetUser) {
+          userSheet.deleteRow(i + 1);
+          break;
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "User profile removed cleanly." })).setMimeType(ContentService.MimeType.JSON);
     }
     
   } catch (err) {
