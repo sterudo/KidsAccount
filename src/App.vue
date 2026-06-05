@@ -8,7 +8,7 @@
 
   <h1 class="app-title"> 
     <button style="float:left;position: absolute; left: 0px;" v-if="currentScreen !== 'dashboard'" @click="backToDashboard"  class="btn btn-back-nav">⬅ Back</button> 
-    <span style="white-space: nowrap;" class="h1s">Kids Accounts  <span class="versionno">v0.27</span></span>      
+    <span style="white-space: nowrap;" class="h1s">Kids Accounts  <span class="versionno">v0.28</span></span>      
 
      <div class="user-selector-and-refresh-group"> 
 
@@ -562,7 +562,6 @@ const currentScreen = ref('dashboard');
 const selectedChildId = ref(null);
 const showMetaFields = ref(false);
 const activeHelper = ref(null);
-const isLoading = ref(true);
 
 const users = ref(['Dad', 'Mum']);
 const currentUser = ref('Dad');
@@ -601,6 +600,15 @@ const dashError = ref('');
 let recognition = null;
 
 
+const systemConfig = ref({});
+const isLoading = ref(false);
+const isAuthenticated = ref(false);
+const deviceFingerprint = ref("");
+
+// Setup LocalStorage key strings
+const STORAGE_KEY = "vault_cached_dataset";
+
+
 // 🌟 NEW STATES FOR ADVANCED DYNAMIC SUGGESTIONS
 const isLocating = ref(false);
 const nearbyShopSuggestions = ref([]);
@@ -627,6 +635,121 @@ watch(currentScreen, (newScreen) => {
     appendScreenLog(`History state pushed for screen: ${newScreen}`, systemLogs);
   }
 });
+
+
+/**
+ * Initializes the application state model out of LocalStorage
+ */
+function initializeAppCache() {
+console.log("initializeAppCache");
+  // Generate/retrieve the device fingerprint first (kept in memory, never saved to storage)
+  deviceFingerprint.value = generateDeviceFingerprint(); 
+
+  const cachedData = localStorage.getItem(STORAGE_KEY);
+  if (cachedData) {
+    try {
+      const parsed = JSON.parse(cachedData);
+      
+      // Hydrate local reactive state frameworks instantly from cache
+      children.value = parsed.children || [];
+      transactions.value = parsed.transactions || [];
+      users.value = parsed.users || [];
+      systemConfig.value = parsed.config || {};
+      
+      // If valid data exists in LocalStorage, the device is implicitly authenticated
+      isAuthenticated.value = true;
+      console.log("isAuthenticated");
+      logToScreen("💾 Local Storage dataset loaded. Screen available instantly.");
+    } catch (e) {
+      logToScreen("⚠️ Corrupted cache layout encountered. Clearing data.");
+      purgeLocalStorageAuth();
+    }
+  }
+}
+
+/**
+ * Core synchronization pipeline with optional background capability
+ */
+async function fetchSyncDatabase(isBackground = false) {
+  // Only trigger the annoying wait-scrim overlay if explicit interaction demands it
+  if (!isBackground) {
+    isLoading.value = true;
+  }
+
+  try {
+    // Append the hardware security token to every outward request parameter row
+    const syncUrl = `${SHEET_API_URL}?fingerprint=${encodeURIComponent(deviceFingerprint.value)}`;
+    
+    const response = await fetch(syncUrl);
+    const data = await response.json();
+
+    // 🌟 403 SECURITY EVICITON: Intercept rejection responses
+    if (data.status === 403 || data.error === "Unauthorized") {
+      logToScreen("❌ 403 Unauthorized detected! Device token revoked by sheet server.");
+      purgeLocalStorageAuth();
+      return;
+    }
+
+    // Update active reactive state references
+    if (data.children) children.value = data.children;
+    if (data.transactions) transactions.value = data.transactions;
+    if (data.users) users.value = data.users;
+    if (data.config) systemConfig.value = data.config; // Config elements safely delivered
+
+    // Commit the newly synchronized dataset block to cache memory storage
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      children: children.value,
+      transactions: transactions.value,
+      users: users.value,
+      config: systemConfig.value
+    }));
+
+    
+    isAuthenticated.value = true;
+    logToScreen("🔄 Background sync complete. Master database updated.", true);
+    
+  } catch (err) {
+    console.error("Network sync warning:", err);
+    logToScreen(`📶 Background sync failed (Offline Mode active): ${err.message}`);
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+/**
+ * Wipe authentication cache and lock the dashboard layout
+ */
+function purgeLocalStorageAuth() {
+  localStorage.removeItem(STORAGE_KEY);
+  children.value = [];
+  transactions.value = [];
+  users.value = [];
+  systemConfig.value = [];
+  isAuthenticated.value = false;
+  alert("🔒 Security Alert: This device is not authorized to view this ledger data.");
+}
+
+// Inside src/App.vue lifecycle blocks
+
+// Handler for silent background polling
+function triggerBackgroundRefresh() {
+  if (isAuthenticated.value) {
+
+    const fiveMinutes = 5 * 60 * 1000;
+    const timeSinceLastSync = Date.now() - lastSyncTime.value;
+
+    if (timeSinceLastSync >= fiveMinutes) {
+      console.log(`Throttled sync allowed: ${Math.round(timeSinceLastSync / 1000)}s since last update.`);
+       fetchSyncDatabase(true); // 🌟 TRUE = Run silently in background without scrim!
+    } else {
+      console.log(`Throttled sync blocked: Only ${Math.round(timeSinceLastSync / 1000)}s ago. Must wait 5 minutes.`);
+    }
+
+   
+  }
+}
+
+
 
 // Handler that triggers when a user hits the browser back or Android physical back button
 function handleHardwareBackButton(event) {
@@ -925,7 +1048,10 @@ async function processLocationContextWithAI(addressJson, explicitName, completeS
 // 🌟 CHANGE: We do NOT create a permanent global instance here anymore.
 // We will instantiate it dynamically on-demand to bypass iOS freezes.
 let activeRecognitionInstance = null;
-function logToScreen(msg) {
+function logToScreen(msg, consolelog = false) {
+  if(consolelog) {
+    console.log(msg);
+  }
   if(!debugMode.value) return; // Skip logging if debug mode is off
   appendScreenLog(msg, voiceLogs);
 }
@@ -1193,72 +1319,6 @@ async function parseStructuralTranscriptWithAI(text) {
   }
 }
 
-async function fetchSyncDatabase() {
-  if(isListening.value) return;
-  isLoading.value = true;
-  try {
-    const response = await fetch(`${SHEET_API_URL}?action=getInitialData`);
-    const data = await response.json();
-    
-    // 1. Normalize Children Data to prevent NaN
-    children.value = (data.children || []).map(child => {
-      // Safely fall back to lowercase keys if Google changed the headers
-      const startAmt = child.startAmount !== undefined ? child.startAmount : child.startamount;
-      const allowance = child.weeklyAllowance !== undefined ? child.weeklyAllowance : child.weeklyallowance;
-      
-      return {
-        id: String(child.id || ''),
-        name: String(child.name || 'Unknown'),
-        // Ensure strings are forced to clean floating numbers
-        startAmount: isNaN(parseFloat(startAmt)) ? 0 : parseFloat(startAmt),
-        weeklyAllowance: isNaN(parseFloat(allowance)) ? 0 : parseFloat(allowance)
-      };
-    });
-
-    // 2. Normalize Transactions Data
-    transactions.value = (data.transactions || []).map(tx => {
-      const amt = tx.amount !== undefined ? tx.amount : tx.amount;
-      return {
-        id: String(tx.id || ''),
-        childid: tx.childid !== undefined ? String(tx.childid) : String(tx.childId || ''),
-        date: String(tx.date || ''),
-        what: String(tx.what || ''),
-        where: String(tx.where || ''),
-        type: String(tx.type || 'withdrawal'),
-        amount: isNaN(parseFloat(amt)) ? 0 : parseFloat(amt),
-        recordedBy: String(tx.recordedby || tx.recordedBy || 'System'),
-        deviceFingerprint: String(tx.device || tx.devicefingerprint || '-'),
-        utcTimestamp: String(tx.timestamp || tx.utctimestamp || '-'),
-        fileUrl: String(tx.fileurl || tx.fileUrl || '')
-      };
-    });
-    
-    // 3. Normalize Authorized Devices
-    authorizedDevices.value = (data.authorizedDevices || []).map(d => String(d).toLowerCase().trim());
-
-    if (data.users && Array.isArray(data.users) && data.users.length > 0) {
-      users.value = data.users;
-      
-      // Safety fallback: if your active selected user gets deleted from the sheet, 
-      // automatically jump back to the first available parent name.
-      if (!users.value.includes(currentUser.value)) {
-        currentUser.value = users.value[0];
-      }
-    }
-    
-    console.log("Normalized Database Clean Sync:", children.value, transactions.value);
-    // 🌟 NEW: Capture the API key passed down securely from your Sheet configuration
-    if (data.geminiApiKey) {
-      cloudGeminiApiKey.value = data.geminiApiKey;
-    }
-    closeVoiceModal();
-    lastSyncTime.value = Date.now();
-  } catch (err) {
-    console.error("Failed to sync database:", err);
-  } finally {
-    isLoading.value = false;
-  }
-}
 
 // Add a reactive array to store the authorized fingerprints coming from the server
 const authorizedDevices = ref([]);
@@ -1291,11 +1351,9 @@ function formatTimestamp(tsStr) {
 
 // Check if this device fingerprint is missing from the authorized list
 const isDeviceUnauthorized = computed(() => {
-  return !authorizedDevices.value.includes(deviceFingerprint.value.toLowerCase().trim());
+  return !isAuthenticated.value;
 });
 
-
-const deviceFingerprint = ref('fp-unknown');
 
 // --- 1. USER PERSISTENCE LIFECYCLES ---
 function saveUserPreference() {
@@ -1303,12 +1361,6 @@ function saveUserPreference() {
 }
 
 onMounted(() => {
- // Establish a baseline layout state for the dashboard on initial application cold launch
-  window.history.replaceState({ screen: 'dashboard' }, '');
-
-  // Bind the global window navigation listener popstate rule
-  window.addEventListener('popstate', handleHardwareBackButton);
-
   // Device fingerprint verification logic
   let fp = localStorage.getItem('pocket_money_fingerprint');
   if (!fp) {
@@ -1326,32 +1378,27 @@ onMounted(() => {
     currentUser.value = 'Dad'; // Default fallback
   }
 
-  // Initial cloud synchronization
-  fetchSyncDatabase();
-// Helper function to check if 1 minute (60,000ms) has passed since the last sync
-  function triggerThrottledRefresh() {
-    const fiveMinutes = 5 * 60 * 1000;
-    const timeSinceLastSync = Date.now() - lastSyncTime.value;
+  // 1. Instantly pull and mount whatever dataset resides in local storage
+  initializeAppCache();
 
-    if (timeSinceLastSync >= fiveMinutes) {
-      console.log(`Throttled sync allowed: ${Math.round(timeSinceLastSync / 1000)}s since last update.`);
-      fetchSyncDatabase();
-    } else {
-      console.log(`Throttled sync blocked: Only ${Math.round(timeSinceLastSync / 1000)}s ago. Must wait 5 minutes.`);
-    }
-  }
-  // 🌟 ENHANCEMENT 2 & 3: Automatic updates when app is opened or brought to foreground
-  // Captures when a user clicks the desktop icon or returns to the browser tab/app instance
-  // 🌟 ENHANCEMENT: Automated updates only when throttle threshold passes
-  document.addEventListener('visibilitychange', () => {
+  console.log("onMounted " + isAuthenticated.value)
+  // 2. Perform an initial sync. If authenticated, this fills the background. If unauthenticated, it triggers a foreground validation check.
+  fetchSyncDatabase(isAuthenticated.value);
+
+  // 3. Bind silent background event hooks
+  window.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-      triggerThrottledRefresh();
+      triggerBackgroundRefresh();
     }
   });
 
-  window.addEventListener('focus', () => {
-    triggerThrottledRefresh();
-  });
+  window.addEventListener('focus', triggerBackgroundRefresh);
+
+   // Establish a baseline layout state for the dashboard on initial application cold launch
+  window.history.replaceState({ screen: 'dashboard' }, '');
+
+  // Bind the global window navigation listener popstate rule
+  window.addEventListener('popstate', handleHardwareBackButton);
 });
 
 const selectedChild = computed(() => children.value.find(c => c.id === selectedChildId.value || String(c.id) === String(selectedChildId.value)));
@@ -1582,38 +1629,97 @@ async function handleCreateChild() {
   }
 }
 async function handleCreateTransaction() {
-  if (txForm.value.type === 'withdrawal' && txForm.value.amount > 200) {
-    alert("Transaction Aborted: Expenditures cannot exceed £200.00.");
-    return;
-  }
-  
-  const newTx = {
-    action: "addTransaction",
-    fingerprint: deviceFingerprint.value, // Pass validation tag
-    id: 'tx_' + Date.now(),
-    childId: String(selectedChildId.value),
-    date: txForm.value.date,
-    what: txForm.value.what,
-    where: txForm.value.where || '-',
-    type: txForm.value.type,
+  if (!txForm.value.amount || !selectedChildId.value) return;
+
+  // 1. Construct a standard lowercase payload to match your Apps Script extraction structure
+  const transactionId = 'tx_' + Date.now();
+  const optimisticTx = {
+    id: transactionId,
+    childid: String(selectedChildId.value), // Kept lowercase to match parseSheetRecords down-streams
+    date: txForm.value.date || new Date().toISOString().split('T')[0],
+    what: txForm.value.what.trim(),
+    where: txForm.value.where?.trim() || '-',
+    type: txForm.value.type, // 'deposit' or 'withdrawal'
     amount: Number(txForm.value.amount),
-    recordedBy: currentUser.value,    
-    receiptImageBase64: txForm.value.receiptImageBase64 || ""
+    recordedby: currentUser.value || 'System',
+    timestamp: new Date().toISOString(),
+    fileurl: txForm.value.receiptImageBase64 ? '⌛ Uploading...' : '' // Temporary status indicator
   };
-  
-  isLoading.value = true;
-  const res = await fetch(SHEET_API_URL, {
-    method: "POST",
-    body: JSON.stringify(newTx)
-  });
-  
-  const statusCheck = await res.json();
-  if (statusCheck.status === 'denied') {
-    alert(statusCheck.message);
+
+  // Keep a reference of the old local ledger state in case we need to roll back a network error
+  const previousTransactions = [...transactions.value];
+
+  try {
+    // 2. OPTIMISTIC UI UPDATE: Clear forms and inject row immediately
+    const base64ImageBackup = txForm.value.receiptImageBase64 || "";
+    txForm.value = { date: txForm.value.date, what: '', where: '', type: 'withdrawal', amount: null, receiptImageBase64: "" };
+    
+    // Push directly to top of screen feed
+    transactions.value.unshift(optimisticTx);
+
+    // 3. PERSIST OPTIMISTIC CACHE: Update LocalStorage immediately in case they close the app right now
+    localStorage.setItem("vault_cached_dataset", JSON.stringify({
+      children: children.value,
+      transactions: transactions.value,
+      users: users.value,
+      config: systemConfig.value
+    }));
+
+    // 4. FIRE BACKWARD NETWORK TASK: Dispatch to Google Sheets API
+    // We send a camelCase structure because doPost reads childId explicitly, but has fallbacks for the rest
+    const networkPayload = {
+      action: "addTransaction",
+      fingerprint: deviceFingerprint.value,
+      id: optimisticTx.id,
+      childId: optimisticTx.childid,
+      date: optimisticTx.date,
+      what: optimisticTx.what,
+      where: optimisticTx.where,
+      type: optimisticTx.type,
+      amount: optimisticTx.amount,
+      recordedBy: optimisticTx.recordedby,
+      utcTimestamp: optimisticTx.timestamp,
+      receiptImageBase64: base64ImageBackup
+    };
+
+    // Dispatch request asynchronously
+    fetch(SHEET_API_URL, {
+      method: "POST",
+      body: JSON.stringify(networkPayload)
+    }).then(async (response) => {
+      const result = await response.json();
+      
+      if (result.status === "success") {
+        logToScreen("☁️ Transaction recorded to cloud spreadsheet successfully.");
+        // Quietly fetch database to get real Drive URL links for images and update calculated totals
+        fetchSyncDatabase(true); 
+      } else if (result.status === 403) {
+        // Handle explicit device eviction immediately
+        logToScreen("❌ Transaction rejected: Unauthorized Device.");
+        purgeLocalStorageAuth();
+      } else {
+        throw new Error(result.message || "Spreadsheet rejected save action.");
+      }
+    }).catch((networkErr) => {
+      console.error("Delayed post error:", networkErr);
+      logToScreen(`⚠️ Network sync error, rolling back local ledger: ${networkErr.message}`);
+      
+      // 5. ROLLBACK SAFETY: Revert UI array and cache instantly if network fails completely
+      transactions.value = previousTransactions;
+      localStorage.setItem("vault_cached_dataset", JSON.stringify({
+        children: children.value,
+        transactions: transactions.value,
+        users: users.value,
+        config: systemConfig.value
+      }));
+      
+      alert(`❌ Could not save transaction: ${networkErr.message}. Local view rolled back.`);
+    });
+
+  } catch (err) {
+    console.error("Local structural exception:", err);
+    transactions.value = previousTransactions;
   }
-  
-  txForm.value = { date: txForm.value.date, what: '', where: '', type: 'withdrawal', amount: null };
-  await fetchSyncDatabase();
 }
 
 async function handleDeleteLastTransaction(txId) {
