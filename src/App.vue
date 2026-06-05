@@ -8,7 +8,7 @@
 
   <h1 class="app-title"> 
     <button style="float:left;" v-if="currentScreen !== 'dashboard'" @click="backToDashboard"  class="btn btn-back-nav">⬅ Back</button> 
-    Kids Accounts  <span style="font-size:12px">v1.21</span>
+    Kids Accounts  <span style="font-size:12px">v1.23</span>
   </h1>
 
   <div id="app">
@@ -1365,10 +1365,12 @@ function generateUniqueList(field, currentInput) {
   let uniqueItems = [...new Set(historyItems)];
   
   // 5. Narrow down the list based on what the user is currently typing
+  /*
   if (currentInput) {
     const search = String(currentInput).toLowerCase().trim();
     uniqueItems = uniqueItems.filter(item => item.toLowerCase().includes(search));
   }
+    */
 
   // 6. Apply multi-tier sorting parameters (Frequency -> Recency -> Alphabetical)
   uniqueItems.sort((a, b) => {

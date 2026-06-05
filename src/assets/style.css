@@ -350,8 +350,9 @@ select {
 }
 input,
 select {
+    border: none;
     padding: 6px !important;
-    border: 1px solid var(--border-color);
+    border-bottom: 2px solid var(--border-color) !important;
     border-radius: 6px;
     font-size: 1rem;
     color: white !important;
@@ -650,7 +651,7 @@ button.Withdraw {
 
 .form-card input,
 .form-card select {
-    box-shadow: 0px 0px 4px white;
+    box-shadow: 1px 1px 1px gray;
 }
 
 /* --- TWO-ROW-PER-TRANSACTION MOBILE LAYOUT RULES --- */
@@ -1398,7 +1399,7 @@ button.Withdraw {
 
     .desktop-grid-header,
     .desktop-grid-row {
-        grid-template-columns: 100px 1fr 110px !important;
+        grid-template-columns: 70px 1fr 110px !important;
     }
 
     .desktop-grid-row.editing-row {
