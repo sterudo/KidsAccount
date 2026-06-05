@@ -38,6 +38,8 @@
           <div class="meta-item">
             <p class="meta-label">Version History:</p>
             <div class="meta-value"><ul>
+                <li><strong>0.36</strong> - Accent color</li>
+                <li><strong>0.35</strong> - Children management.</li>
                 <li><strong>0.34</strong> - Visual improvements mainly Dashboard.</li>
                 <li><strong>0.33</strong> - API Key fixes.</li>
                 <li><strong>0.32</strong> - Child to Child transfer</li>

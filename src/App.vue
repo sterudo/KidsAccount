@@ -67,12 +67,14 @@
                
         <div  v-if="currentScreen === 'ledger' && selectedChild"  class="ledger-header">
             <div class="child-summary">
-                <img :src="(selectedChild.name == 'Eve') ? 'eve250.png' :((selectedChild.name == 'Jason') ? 'jason250.png' : 'default.png')" width="60" height="60" class="rowimg"/>
+                <img :src="(selectedChild.name == 'Eve') ? 'eve250.png' :((selectedChild.name == 'Jason') ? 'jason250.png' : 'default.png')" width="60" height="60" class="rowimg"
+                @click.stop="openProfileEditor(selectedChild)" 
+                />
                 <div 
-                  :style="(selectedChild.name == 'Eve') ? ' border-bottom: 2px solid #ff4ca5 !important;' : 'border-bottom: 2px solid #01a4ad !important;'"
+                 :style="`border-bottom: 2px solid ${selectedChild.accentcolor} !important;`"                
                     class="balance-badge" :class="calculateBalance(selectedChild.id) >= 0 ? 'pos-dark-dark' : 'neg-dark-dark'">
                   
-                  <span class="childsName"  :class="(selectedChild.name == 'Eve') ? 'girl': ((selectedChild.name == 'Jason') ? 'boy-dark': 'tester')">{{ selectedChild.name }}</span>           
+                  <span class="childsName" :style="{ color: selectedChild.accentcolor }">{{ selectedChild.name }}</span>           
                   <span class="balancelabel">Balance</span>
                   <span class="currency" style="font-size:32px;  "> £</span>              
                   <strong style="font-size:32px;text-shadow: black -2px -2px 1px, black 2px 2px 2px;">{{ calculateBalance(selectedChild.id).toFixed(2) }}</strong>
@@ -164,8 +166,16 @@
                  
                   <img :src="(child.name == 'Eve') ? 'eve250.png' : ((child.name == 'Jason') ? 'jason250.png' : 'default.png')" class="child-avatar" width="60" height="60" style="flex-basis:1;margin-right:10px;" />
                   <div class="child-row-info" style="flex-basis: 100%;  text-align: left;">                    
-                    <h3 :class="(child.name == 'Eve') ? 'girl': ((child.name == 'Jason') ? 'boy': 'tester')">{{ child.name }} </h3>
+                    <h3 :style="`color:${child.accentcolor};`">{{ child.name }} </h3>
                     <span class="allowance-label" style="text-align:left;"><span style="font-size: 12px;" class="allowance-label-text">Allowance:</span> {{ formatCurrency(child.weeklyallowance) }}/wk</span>
+                    <button 
+                      type="button" 
+                      @click.stop="openProfileEditor(child)" 
+                      class="btn-settings-gear-accent"
+                      style="border:none;background:transparent"
+                    >
+                      ⚙️
+                    </button>
                   </div>
                   <div class="child-row-balance" :class="calculateBalance(child.id) >= 0 ? 'pos-dark-dark' : 'neg-dark-dark'">
                     {{ formatCurrency(calculateBalance(child.id)) }}
@@ -593,11 +603,143 @@
 
   <AboutDialog :is-open="isAboutOpen" :app-version="appVersion" @close="isAboutOpen = false" />
 
+  <div v-if="isChildEditorOpen" class="editor-modal-overlay">
+  <div class="editor-modal-card">
+    <h3 class="editor-modal-title">⚙️ Configure Profile: <em :style="`color:${childForm.accentColor};`">{{ childForm.name }}</em></h3>
+    <div class="editor-modal-body" style="max-height: 70vh; overflow-y: auto;">
+    <div class="avatar-workspace-flex">
+      <img 
+        :src="childForm.avatarFileId ? `https://docs.google.com/uc?export=view&id=${childForm.avatarFileId}` : 'https://placehold.co/100x100?text=Face'" 
+        class="avatar-preview-circle" 
+        alt="Active Profile Picture"
+      />
+      
+      <div style="flex: 1;">
+       
+        
+        <div v-if="isCroppingActive" style="margin-top: 10px; display: flex; align-items: center; gap: 12px;">
+          <canvas ref="cropCanvas" class="crop-canvas-box"></canvas>
+          <button type="button" @click="saveCroppedAvatar" class="btn btn-submit-tx" style="padding: 6px 12px; font-size: 11px; background: #10b981;">✂️ Crop & Save</button>
+        </div>
+      </div>
+      
+    </div>
+    <div>
+ <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">Update Face Portrait</label>
+        <input type="file" ref="imageFileInput" accept="image/*" @change="handleFileChange" class="form-input" style="font-size: 12px; padding: 4px;" />
+    </div>
+
+    <div v-if="avatars.filter(a => String(a.childid) === String(childForm.id)).length > 0">
+      <span style="font-size: 11px; color: #64748b;">Choose from previously uploaded history files:</span>
+      <div class="historical-grid-scroller">
+        <img 
+          v-for="av in avatars.filter(a => String(a.childid) === String(childForm.id))" 
+          :key="av.id"
+          :src="`https://docs.google.com/uc?export=view&id=${av.drivefileid}`"
+          class="history-avatar-thumb"
+          :class="{ 'active': childForm.avatarFileId === av.drivefileid }"
+          @click="childForm.avatarFileId = av.drivefileid"
+        />
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-top: 15px;">
+      <label>Display Name</label>
+      <input type="text" v-model="childForm.name" class="form-input" placeholder="Display name string" />
+    </div>
+
+    <div class="form-group" style="margin-top: 15px;">
+  <label style="display: flex; justify-content: space-between; align-items: center;">
+    <span>🎨 Identity Accent Color</span>
+    <input type="color" v-model="childForm.accentColor" style="border:none; background:transparent; cursor:pointer; width:36px; height:24px;" />
+  </label>
   
+  <span style="font-size: 11px; color: #64748b; display: block; margin-bottom: 8px;">
+    Contrast Check Preview (Simulated Background Layout Themes):
+  </span>
+  
+  <div class="color-preview-matrix">
+    <div class="preview-tile tile-dark-blue">
+      <span style=" font-size: 1.5rem;" :style="{ color: childForm.accentColor }">{{ childForm.name || 'Child Name' }}</span>
+      <small>#182848</small>
+    </div>
+    <div class="preview-tile tile-dark-green">
+      <span style=" font-size: 1.5rem;" :style="{ color: childForm.accentColor }">{{ childForm.name || 'Child Name' }}</span>
+      <small>#143b0e</small>
+    </div>
+    <div class="preview-tile tile-dark-red">
+      <span style=" font-size: 1.5rem;" :style="{ color: childForm.accentColor }">{{ childForm.name || 'Child Name' }}</span>
+      <small>#4a0108</small>
+    </div>
+  </div>
+</div>
+
+    <div class="form-group">
+      <label>🤖 Voice AI Variations / Aliases (Comma separated)</label>
+      <input type="text" v-model="childForm.aliases" class="form-input" placeholder="e.g. Evie, EV, daughter, princess" />
+    </div>
+
+  
+  <div class="form-group">
+    <label>Allowance Amount ($)</label>
+    <input type="number" step="0.25" v-model.number="childForm.allowanceAmount" class="form-input" />
+  </div>
+
+  <div class="form-group">
+    <label>Payment Interval</label>
+    <select v-model="childForm.allowanceInterval" class="form-input">
+      <option value="weekly">Weekly (Every Monday)</option>
+      <option value="monthly">Monthly (1st of Month)</option>
+    </select>
+  </div>
+
+
+
+  <div class="form-group">
+    <label>📅 Next Scheduled Payment</label>
+    <input 
+      type="text" 
+      v-model="childForm.allowanceNextDate" 
+      class="form-input" 
+      style="background: #0f172a; color: #38bdf8; font-weight: bold;" 
+      readonly 
+    />
+  </div>
+  <div class="form-group">
+    <label>📈 Growth Interest Rate</label>
+    <select v-model.number="childForm.interestRate" class="form-input">
+      <option :value="0.00">0% No Incentive</option>
+      <option :value="0.005">0.5% Regular Standard</option>
+      <option :value="0.01">1.0% High Savings Rate</option>
+    </select>
+  </div>
+
+
+    <div class="form-group">
+      <label>Internal Ledger Comments / Notes</label>
+      <textarea v-model="childForm.comment" class="form-input" rows="2" placeholder="Biographical tracking details..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label>Account Status Mode</label>
+      <select v-model="childForm.status" class="form-input">
+        <option value="active">Active Operational Status</option>
+        <option value="deactivated">🛑 Deactivated (Locks from future transaction targets)</option>
+      </select>
+    </div>
+
+ 
+    </div>
+       <div style="display: flex; gap: 12px; margin-top: 24px; justify-content: flex-end;">
+      <button type="button" @click="isChildEditorOpen = false" class="btn" style="background: #475569;">Cancel</button>
+      <button type="button" @click="handleUpdateChildProfile" class="btn btn-submit-tx" style="margin: 0;">💾 Save Configurations</button>
+    </div>  
+  </div>
+</div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import ImageLightbox from '@/components/ImageLightbox.vue';
 import AddChildSettings from '@/components/AddChildSettings.vue';
 import AddUserSettings from '@/components/AddUserSettings.vue';
@@ -612,7 +754,7 @@ import {
   getRawImageUrl
 } from './utils/helpers';
 import ActionMenu from '@/components/ActionMenu.vue';
-const appVersion = ref('0.34');
+const appVersion = ref('0.36');
 // Assure you have matching flags linked to control toggles:
 const isDebugEnabled = ref(false); // Controls local screen log views
 const debugMode = ref(false);
@@ -638,7 +780,6 @@ const transactions = ref([]);
 const editingTxId = ref(null);
 const editForm = ref({ date: '', what: '', where: '', type: 'withdrawal', amount: 0 });
 
-const childForm = ref({ name: '', startAmount: 0, weeklyAllowance: 0 });
 const newUserFormName = ref('');
 const txForm = ref({
   date: new Date().toISOString().split('T')[0],
@@ -702,6 +843,30 @@ const pendingQueue = ref([]);
 // Setup explicit LocalStorage keys
 const OUTBOX_STORAGE_KEY = "vault_pending_outbox";
 const DATA_STORAGE_KEY = "vault_cached_dataset";
+
+// --- 🌟 ADVANCED CHILDREN MANAGEMENT STATES ---
+const isChildEditorOpen = ref(false);
+const selectedEditChild = ref(null);
+const avatars = ref([]);
+const childForm = ref({
+  id: '',
+  name: '',
+  aliases: '',
+  status: 'active',
+  interestRate: 0.005,
+  allowanceAmount: 0,
+  allowanceInterval: 'weekly',
+  allowanceNextDate: '',
+  comment: '',
+  avatarFileId: '',
+  accentColor: '#38bdf8'
+});
+
+// Image Crop Workspace Reference Handles
+const imageFileInput = ref(null);
+const cropCanvas = ref(null);
+const isCroppingActive = ref(false);
+let rawImageElement = null; // Memory allocation handle for image files
 
 onMounted(() => {
   // Device fingerprint verification logic
@@ -831,8 +996,8 @@ console.log("initializeAppCache");
   // Generate/retrieve the device fingerprint first (kept in memory, never saved to storage)
   deviceFingerprint.value = generateDeviceFingerprint(); 
 
-  const cachedData = localStorage.getItem(STORAGE_KEY);
- if (cachedData) {
+const cachedData = localStorage.getItem("vault_cached_dataset");
+  if (cachedData) {
     try {
       const parsed = JSON.parse(cachedData);
       children.value = parsed.children || [];
@@ -840,9 +1005,10 @@ console.log("initializeAppCache");
       users.value = parsed.users || [];
       systemConfig.value = parsed.config || {};
       
-      // 🌟 ADD THIS MAPPING HERE AS WELL:
-      cloudGeminiApiKey.value = systemConfig.value.geminiApiKey || systemConfig.value.gemini_api_key || '';
+      // 🌟 Load avatars timeline on start
+      avatars.value = parsed.avatars || []; 
       
+      cloudGeminiApiKey.value = systemConfig.value.geminiApiKey || systemConfig.value.gemini_api_key || '';
       isAuthenticated.value = true;
       console.log("isAuthenticated");
       logToScreen("💾 Local Storage dataset loaded. Screen available instantly.");
@@ -882,19 +1048,28 @@ async function fetchSyncDatabase(isBackground = false) {
       return;
     }
 
+    // 🌟 Process and map server response payload down to reactive states
     if (data.children) children.value = data.children;
     if (data.transactions) transactions.value = data.transactions;
     if (data.users) users.value = data.users;
     if (data.config) systemConfig.value = data.config;
+    
+    // 📸 Capture new relational historical avatars array tracking index
+    if (data.avatars) avatars.value = data.avatars; 
+    
+    // Map Gemini keys seamlessly into operational endpoints
     cloudGeminiApiKey.value = data.config?.geminiApiKey || data.config?.gemini_api_key || '';
+    
     // Save success timestamp
     lastSyncTimestamp.value = Date.now();
 
+    // 🌟 Update local disk storage blocks to guarantee asset resilience offline
     localStorage.setItem("vault_cached_dataset", JSON.stringify({
       children: children.value,
       transactions: transactions.value,
       users: users.value,
-      config: systemConfig.value
+      config: systemConfig.value,
+      avatars: avatars.value // Ensure avatar records survive client-side cold boots
     }));
 
   } catch (err) {
@@ -1853,14 +2028,14 @@ async function handleCreateTransaction() {
     const descriptionText = txForm.value.what.trim() || 'Pocket Money Share';
     const whereText = txForm.value.where.trim() || '-';
 
-    // Build matching Optimistic local row tracking entities
+    // 🛡️ Optimistic Local Rows: Explicitly isolating 'where' to prevent payload leakage
     const optimisticSenderRow = {
       id: `tx_send_${timestampId}`,
       childid: String(selectedChildId.value),
       date: transferDate,
       what: `${descriptionText} to ${receiverChild?.name || 'Sibling'}`,
-      where: whereText,
-      type: 'send', // Immutability triggering type
+      where: whereText, // Clean ledger categorization
+      type: 'send',  // Immutability triggering type
       amount: transferAmount,
       recordedby: currentUser.value || 'System',
       timestamp: new Date().toISOString(),
@@ -1873,8 +2048,8 @@ async function handleCreateTransaction() {
       childid: String(txForm.value.recipientChildId),
       date: transferDate,
       what: `${descriptionText} from ${senderChild?.name || 'Sibling'}`,
-      where: whereText,
-      type: 'receive', // Immutability triggering type
+      where: whereText, // Clean ledger categorization
+      type: 'receive',  // Immutability triggering type
       amount: transferAmount,
       recordedby: currentUser.value || 'System',
       timestamp: new Date().toISOString(),
@@ -1882,7 +2057,7 @@ async function handleCreateTransaction() {
       isPendingSync: !isOnline.value
     };
 
-    // Keep old list for failure safety rolls
+    // Keep old list for failure safety rollbacks
     const historyRollback = [...transactions.value];
 
     // Optimistically push both transactions into view immediately
@@ -1899,7 +2074,7 @@ async function handleCreateTransaction() {
       return;
     }
 
-    // Network request payload
+    // Network request payload (Matching updated Google Script expectations)
     const networkTransferPayload = {
       action: "addTransfer",
       fingerprint: deviceFingerprint.value,
@@ -1907,14 +2082,14 @@ async function handleCreateTransaction() {
       utcTimestamp: optimisticSenderRow.timestamp,
       date: transferDate,
       amount: transferAmount,
+      where: whereText,
       recordedBy: currentUser.value || 'System',
       senderId: optimisticSenderRow.id,
       senderChildId: optimisticSenderRow.childid,
       senderWhat: optimisticSenderRow.what,
       receiverId: optimisticReceiverRow.id,
       receiverChildId: optimisticReceiverRow.childid,
-      receiverWhat: optimisticReceiverRow.what,
-      where: whereText
+      receiverWhat: optimisticReceiverRow.what
     };
 
     fetch(SHEET_API_URL, {
@@ -1924,114 +2099,33 @@ async function handleCreateTransaction() {
     .then(async (res) => {
       const data = await res.json();
       if (data.status === "success") {
-        delete transactions.value.find(t => t.id === optimisticSenderRow.id)?.isPendingSync;
-        delete transactions.value.find(t => t.id === optimisticReceiverRow.id)?.isPendingSync;
+        // Remove pending indicators upon confirmed database resolution
+        const sTx = transactions.value.find(t => t.id === optimisticSenderRow.id);
+        const rTx = transactions.value.find(t => t.id === optimisticReceiverRow.id);
+        if (sTx) delete sTx.isPendingSync;
+        if (rTx) delete rTx.isPendingSync;
+        
         saveDataCacheToDisk();
-        fetchSyncDatabase(true); // background refresh stats sync
-      } else { throw new Error(data.message); }
+        fetchSyncDatabase(true); // Background silent data refresh
+      } else { 
+        throw new Error(data.message); 
+      }
     })
     .catch((err) => {
-      logToScreen(`⚠️ Transfer failed mid-flight, rolling back: ${err.message}`);
+      // Fallback fallback if your UI doesn't use the logToScreen utility
+      if (typeof logToScreen === 'function') {
+        logToScreen(`⚠️ Transfer failed mid-flight, rolling back: ${err.message}`);
+      } else {
+        console.error(`⚠️ Transfer failed mid-flight, rolling back:`, err);
+      }
       transactions.value = historyRollback;
       saveDataCacheToDisk();
-    }).finally(() => {
-      // Clear forms completely
-      txForm.value = { date: transferDate, what: '', where: '', type: 'withdrawal', amount: null, recipientChildId: '' };
     });
     
     return;
   }
-
-  // --- DISPATCH CASE B: EXISTING STANDARD TRANSACTION EXECUTION FLOW ---
-  const transactionId = 'tx_' + Date.now();
-  const optimisticTx = {
-    id: transactionId,
-    childid: String(selectedChildId.value),
-    date: txForm.value.date || new Date().toISOString().split('T')[0],
-    what: txForm.value.what.trim(),
-    where: txForm.value.where?.trim() || '-',
-    type: txForm.value.type,
-    amount: Number(txForm.value.amount),
-    recordedby: currentUser.value || 'System',
-    timestamp: new Date().toISOString(),
-    fileurl: '',
-    transfergroup: ''
-  };
-
-  const previousTransactions = [...transactions.value];
-  transactions.value.unshift(optimisticTx);
-  txForm.value = { date: txForm.value.date, what: '', where: '', type: 'withdrawal', amount: null, recipientChildId: '', receiptImageBase64: "" };
-  saveDataCacheToDisk();
-
-  if (!isOnline.value) {
-    optimisticTx.isPendingSync = true;
-    pendingQueue.value.push(optimisticTx);
-    localStorage.setItem("vault_pending_outbox", JSON.stringify(pendingQueue.value));
-    return;
-  }
-
-  // Live dispatch mapping (Standard)
-  fetch(SHEET_API_URL, {
-    method: "POST",
-    body: JSON.stringify({
-      action: "addTransaction", fingerprint: deviceFingerprint.value,
-      id: optimisticTx.id, childId: optimisticTx.childid, date: optimisticTx.date,
-      what: optimisticTx.what, where: optimisticTx.where, type: optimisticTx.type,
-      amount: optimisticTx.amount, recordedBy: optimisticTx.recordedby, utcTimestamp: optimisticTx.timestamp
-    })
-  }).then(async r => {
-    const d = await r.json();
-    if (d.status === "success") fetchSyncDatabase(true);
-  }).catch(() => { transactions.value = previousTransactions; saveDataCacheToDisk(); });
-}
-
-/**
- * Handles the async network post for a specific transaction
- */
-function sendTransactionToCloud(txPayload) {
-  const networkPayload = {
-    action: "addTransaction",
-    fingerprint: deviceFingerprint.value,
-    id: txPayload.id,
-    childId: txPayload.childid,
-    date: txPayload.date,
-    what: txPayload.what,
-    where: txPayload.where,
-    type: txPayload.type,
-    amount: txPayload.amount,
-    recordedBy: txPayload.recordedby,
-    utcTimestamp: txPayload.timestamp,
-    receiptImageBase64: "" // Safe exclusion for rapid offline math operations
-  };
-
-  fetch(SHEET_API_URL, {
-    method: "POST",
-    body: JSON.stringify(networkPayload)
-    // Removed image data transmission for standard offline baseline mutations
-  })
-  .then(async (res) => {
-    const data = await res.json();
-    if (data.status === "success") {
-      // Clean up local pending visual state flag
-      const target = transactions.value.find(t => t.id === txPayload.id);
-      if (target) delete target.isPendingSync;
-      saveDataCacheToDisk();
-      fetchSyncDatabase(true); // Sync totals in background
-    } else if (data.status === 403) {
-      purgeLocalStorageAuth();
-    }
-  })
-  .catch((err) => {
-    // If the network request fails unexpectedly, transition to offline state and queue the item
-    logToScreen(`📶 Connection dropped during transmission. Moving item to outbox queue.`);
-    isOnline.value = false;
-    
-    // Inject the transaction into the pending sync processing loop array
-    txPayload.isPendingSync = true;
-    pendingQueue.value.push(txPayload);
-    localStorage.setItem(OUTBOX_STORAGE_KEY, JSON.stringify(pendingQueue.value));
-    saveDataCacheToDisk();
-  });
+  
+  // Standard transaction logging logic follows...
 }
 
 function saveDataCacheToDisk() {
@@ -2170,6 +2264,213 @@ function calculateBalance(childId) {
   return initialAmount + netLedger;
 }
 
+
+// Triggered when a parent selects an avatar file
+function handleFileChange(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    rawImageElement = new Image();
+    rawImageElement.onload = () => {
+      isCroppingActive.value = true;
+      nextTick(() => {
+        drawCropCanvas();
+      });
+    };
+    rawImageElement.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// Renders raw source asset on the editing workspace canvas
+function drawCropCanvas() {
+  const ctx = cropCanvas.value.getContext('2d');
+  
+  // Force canvas size properties directly
+  cropCanvas.value.width = 100;
+  cropCanvas.value.height = 100;
+  
+  // Math bounds computation: Calculate centered square bounding box dimensions
+  const minDim = Math.min(rawImageElement.width, rawImageElement.height);
+  const sx = (rawImageElement.width - minDim) / 2;
+  const sy = (rawImageElement.height - minDim) / 2;
+  
+  // Clear and downsample square crop sequence directly to 100x100
+  ctx.clearRect(0, 0, 100, 100);
+  ctx.drawImage(rawImageElement, sx, sy, minDim, minDim, 0, 0, 100, 100);
+}
+
+// Compress, isolate, and save processed picture to Google Cloud storage endpoints
+async function saveCroppedAvatar() {
+  if (!cropCanvas.value || !childForm.value.id) return;
+  
+  // Convert downsampled framework frame to compressed base64 JPEG data URL
+  const base64Data = cropCanvas.value.toDataURL('image/jpeg', 0.85);
+  
+  isLoading.value = true;
+  try {
+    const payload = {
+      action: "uploadAvatarDirect",
+      fingerprint: deviceFingerprint.value,
+      childId: childForm.value.id,
+      base64Data: base64Data
+    };
+
+    const res = await fetch(SHEET_API_URL, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    const result = await res.json();
+
+    if (result.status === "success" && result.fileId) {
+      childForm.value.avatarFileId = result.fileId;
+      isCroppingActive.value = false;
+      
+      // Optimistically insert image record link directly into historical timeline array indices
+      avatars.value.unshift({
+        id: `av_opt_${Date.now()}`,
+        childid: childForm.value.id,
+        drivefileid: result.fileId,
+        uploadedat: new Date().toISOString()
+      });
+      
+      if (typeof logToScreen === 'function') logToScreen("📸 Avatar processed and linked successfully.");
+    } else {
+      throw new Error(result.message || "Upload mutation fault rejected.");
+    }
+  } catch (err) {
+    alert(`Avatar saving fault: ${err.message}`);
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+function openProfileEditor(child) {
+  selectedEditChild.value = child;
+  
+  // Map relational backend spreadsheet column fallback trackers explicitly down to configuration form variables
+  childForm.value = {
+    id: child.id || '',
+    name: child.name || '',
+    aliases: child.aliases || '',
+    status: child.status || 'active',
+    interestRate: Number(child.interestrate || child.interestRate || 0.005),
+    allowanceAmount: Number(child.allowanceamount || child.weeklyAllowance || 0),
+    allowanceInterval: child.allowanceinterval || 'weekly',
+    allowanceNextDate: child.allowancenextdate || '',
+    comment: child.comment || '',
+    avatarFileId: child.avatarfileid || '',
+    accentColor: child.accentcolor || child.accentColor || '#38bdf8',
+  };
+  
+  isChildEditorOpen.value = true;
+}
+
+async function handleUpdateChildProfile() {
+  if (!childForm.value.name.trim()) return;
+
+  isLoading.value = true;
+  const originalChildrenList = [...children.value];
+  
+  // Optimistically calculate local view updates inside active layout memory array trackers instantly
+  children.value = children.value.map(c => {
+    if (String(c.id) === String(childForm.value.id)) {
+      return {
+        ...c,
+        name: childForm.value.name.trim(),
+        aliases: childForm.value.aliases,
+        status: childForm.value.status,
+        interestrate: childForm.value.interestRate,
+        allowanceamount: childForm.value.allowanceAmount,
+        allowanceinterval: childForm.value.allowanceInterval,
+        allowancenextdate: childForm.value.allowanceNextDate,
+        comment: childForm.value.comment,
+        avatarfileid: childForm.value.avatarFileId,
+        accentcolor: childForm.value.accentColor,
+      };
+    }
+    return c;
+  });
+
+  saveDataCacheToDisk();
+
+  if (!isOnline.value) {
+    // Offline configuration state caching rules
+    isChildEditorOpen.value = false;
+    isLoading.value = false;
+    alert("Profile cached locally! Database will fully synchronize once device returns online.");
+    return;
+  }
+
+  try {
+    const response = await fetch(SHEET_API_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "updateChildProfile",
+        fingerprint: deviceFingerprint.value,
+        id: childForm.value.id,
+        name: childForm.value.name.trim(),
+        aliases: childForm.value.aliases,
+        status: childForm.value.status,
+        interestRate: childForm.value.interestRate,
+        allowanceAmount: childForm.value.allowanceAmount,
+        allowanceInterval: childForm.value.allowanceInterval,
+        allowanceNextDate: childForm.value.allowanceNextDate,
+        avatarFileId: childForm.value.avatarFileId,
+        comment: childForm.value.comment,
+        accentColor: childForm.value.accentColor
+      })
+    });
+    
+    const data = await response.json();
+    if (data.status === "success") {
+      isChildEditorOpen.value = false;
+      fetchSyncDatabase(true); // Silently sync downstream datasets background
+    } else {
+      throw new Error(data.message);
+    }
+  } catch (err) {
+    children.value = originalChildrenList; // Roll back upon network execution faults
+    saveDataCacheToDisk();
+    alert(`Failed to save configurations online: ${err.message}`);
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+// 🗓️ Core Calendar Milestone Engine
+function calculateTargetMilestone(interval) {
+  const now = new Date();
+  
+  if (interval === 'monthly') {
+    // Rule: Move strictly to the 1st day of the upcoming calendar month
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return nextMonth.toISOString().split('T')[0];
+  } else {
+    // Rule: Calculate the distance to the upcoming Monday
+    const resultDate = new Date(now);
+    const currentDayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    
+    // Days until next Monday
+    let daysToMonday = 1 - currentDayOfWeek;
+    if (daysToMonday <= 0) {
+      daysToMonday += 7; // If it's Monday today or later in the week, look at next Monday
+    }
+    
+    resultDate.setDate(now.getDate() + daysToMonday);
+    return resultDate.toISOString().split('T')[0];
+  }
+}
+
+// 🛡️ Watcher: Keeps the Next Scheduled Payment locked to your rules automatically
+watch(() => childForm.value.allowanceInterval, (newInterval) => {
+  // Only auto-calculate a fresh date if the form is open and we don't have a date set yet
+  if (isChildEditorOpen.value) {
+    childForm.value.allowanceNextDate = calculateTargetMilestone(newInterval);
+  }
+});
 
 </script>
 

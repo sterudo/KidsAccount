@@ -23,6 +23,7 @@ function doGet(e) {
   const txSheet = sheet.getSheetByName("transactions");
   const configSheet = sheet.getSheetByName("config");
   const userSheet = sheet.getSheetByName("users");
+  const avatarSheet = sheet.getSheetByName("avatars"); // Added reference
 
   function parseSheetRecords(targetSheet) {
     if (!targetSheet) return [];
@@ -48,6 +49,7 @@ function doGet(e) {
   
   const children = parseSheetRecords(childrenSheet);
   const transactions = parseSheetRecords(txSheet);
+  const avatarsHistory = parseSheetRecords(avatarSheet); // Parse historical avatar images
   
   let usersList = ["Dad", "Mum"];
   if (userSheet) {
@@ -75,7 +77,8 @@ function doGet(e) {
       children: children,
       transactions: transactions,
       users: usersList,
-      config: systemConfig
+      config: systemConfig,
+      avatars: avatarsHistory // 🌟 Sent down to allow re-selection from cache later
     })).setMimeType(ContentService.MimeType.JSON);
   }
   
@@ -144,7 +147,7 @@ function doPost(e) {
       result = { status: "success", message: "Transaction written to spreadsheet." };
     }
     
-    // --- 🌟 NEW ACTIONS LAYER: ATOMIC DOUBLE-ENTRY DISPATCH TRANSFER ---
+    // --- ACTIONS LAYER: ATOMIC DUAL TRANSFER WRITER ---
     else if (action === "addTransfer") {
       const txHeaders = txSheet.getDataRange().getValues()[0].map(h => String(h).toLowerCase().trim());
       const timestamp = payload.utcTimestamp || new Date().toISOString();
@@ -157,8 +160,8 @@ function doPost(e) {
         else if (header === "childid") senderRow[index] = payload.senderChildId;
         else if (header === "date") senderRow[index] = payload.date;
         else if (header === "what") senderRow[index] = payload.senderWhat;
-        else if (header === "where") senderRow[index] = payload.where;
-        else if (header === "type") senderRow[index] = "send"; // Distinct type logged
+        else if (header === "where") senderRow[index] = "send"; // Corrected out of payload leakage
+        else if (header === "type") senderRow[index] = "send"; 
         else if (header === "amount") senderRow[index] = Number(payload.amount) || 0;
         else if (header === "recordedby") senderRow[index] = payload.recordedBy || "System";
         else if (header === "device") senderRow[index] = fingerprint;
@@ -173,8 +176,8 @@ function doPost(e) {
         else if (header === "childid") receiverRow[index] = payload.receiverChildId;
         else if (header === "date") receiverRow[index] = payload.date;
         else if (header === "what") receiverRow[index] = payload.receiverWhat;
-        else if (header === "where") receiverRow[index] = payload.where;
-        else if (header === "type") receiverRow[index] = "receive"; // Distinct type logged
+        else if (header === "where") receiverRow[index] = "receive"; // Corrected out of payload leakage
+        else if (header === "type") receiverRow[index] = "receive"; 
         else if (header === "amount") receiverRow[index] = Number(payload.amount) || 0;
         else if (header === "recordedby") receiverRow[index] = payload.recordedBy || "System";
         else if (header === "device") receiverRow[index] = fingerprint;
@@ -201,7 +204,6 @@ function doPost(e) {
         if (String(data[i][idIdx]).trim() === String(tx.id || payload.id).trim()) {
           foundRowIndex = i + 1;
           const currentType = String(data[i][typeIdx]).toLowerCase().trim();
-          // 🛡️ SECURITY GUARD: Intercept backend modification requests Targeting transfers
           if (currentType === "send" || currentType === "receive") {
             throw new Error("Immutable Action: Modification of Inter-child Transfer entries is locked.");
           }
@@ -237,7 +239,6 @@ function doPost(e) {
       for (let i = 1; i < data.length; i++) {
         if (String(data[i][idIdx]).trim() === String(targetId).trim()) {
           const currentType = String(data[i][typeIdx]).toLowerCase().trim();
-          // 🛡️ SECURITY GUARD: Intercept backend deletion requests Targeting transfers
           if (currentType === "send" || currentType === "receive") {
             throw new Error("Immutable Action: Deletion of Inter-child Transfer entries is locked.");
           }
@@ -254,34 +255,67 @@ function doPost(e) {
       }
     }
     
-    else if (action === "createChild") {      
-      if (!childrenSheet) throw new Error("The 'children' sheet tab could not be found.");
-      childrenSheet.appendRow([payload.id, payload.name, Number(payload.startAmount) || 0, Number(payload.weeklyAllowance) || 0]);
-      result = { status: "success", message: "Child account recorded successfully." };
-    }
-    else if (action === "createUser") {
-      const userSheet = sheet.getSheetByName("users");
-      const newUserName = String(payload.name).trim();
-      if (!newUserName) throw new Error("User registration name cannot be empty.");
-      const existingUsers = userSheet.getDataRange().getValues().map(r => String(r[0]).trim().toLowerCase());
-      if (existingUsers.includes(newUserName.toLowerCase())) {
-        result = { status: "success", message: "User already registered." };
-      } else {
-        userSheet.appendRow([newUserName]);
-        result = { status: "success", message: "User written to database sheet successfully." };
-      }
-    }
-    else if (action === "deleteUser") {
-      const userSheet = sheet.getSheetByName("users");
-      const targetUser = String(payload.name).trim().toLowerCase();
-      const data = userSheet.getDataRange().getValues();
+    // --- ACTIONS LAYER 4: UPDATE / SAVE ENHANCED CHILD PROFILE DATA ---
+    else if (action === "updateChildProfile") {
+      if (!childrenSheet) throw new Error("Children sheet unavailable.");
+      const data = childrenSheet.getDataRange().getValues();
+      const headers = data[0].map(h => String(h).toLowerCase().trim());
+      
+      const idIdx = headers.indexOf("id");
+      let matchedRow = -1;
+      
       for (let i = 1; i < data.length; i++) {
-        if (String(data[i][0]).trim().toLowerCase() === targetUser) {
-          userSheet.deleteRow(i + 1);
+        if (String(data[i][idIdx]).trim() === String(payload.id).trim()) {
+          matchedRow = i + 1;
           break;
         }
       }
-      result = { status: "success", message: "User profile removed cleanly." };
+      
+      if (matchedRow === -1) throw new Error("Child record to update not found.");
+      
+      // Dynamically map updates into respective columns safely
+      headers.forEach((header, idx) => {
+        const cell = childrenSheet.getRange(matchedRow, idx + 1);
+        if (header === "name") cell.setValue(payload.name);
+        else if (header === "aliases") cell.setValue(payload.aliases || "");
+        else if (header === "status") cell.setValue(payload.status || "active");
+        else if (header === "interestrate") cell.setValue(Number(payload.interestRate) || 0);
+        else if (header === "allowanceamount") cell.setValue(Number(payload.allowanceAmount) || 0);
+        else if (header === "allowanceinterval") cell.setValue(payload.allowanceInterval || "weekly");
+        else if (header === "allowancenextdate") cell.setValue(payload.allowanceNextDate || "");
+        else if (header === "avatarfileid") cell.setValue(payload.avatarFileId || "");
+        else if (header === "comment") cell.setValue(payload.comment || "");
+        else if (header === "accentcolor") cell.setValue(payload.accentColor || "#38bdf8");
+      });
+      
+      result = { status: "success", message: "Child configurations synchronized cleanly." };
+    }
+    
+    else if (action === "createChild") {      
+      if (!childrenSheet) throw new Error("The 'children' sheet tab could not be found.");
+      const headers = childrenSheet.getDataRange().getValues()[0].map(h => String(h).toLowerCase().trim());
+      let newRow = new Array(headers.length).fill("");
+      
+      headers.forEach((h, i) => {
+        if (h === "id") newRow[i] = payload.id;
+        else if (h === "name") newRow[i] = payload.name;
+        else if (h === "startamount") newRow[i] = Number(payload.startAmount) || 0;
+        else if (h === "status") newRow[i] = "active";
+        else if (h === "allowanceamount") newRow[i] = Number(payload.weeklyAllowance) || 0;
+        else if (h === "allowanceinterval") newRow[i] = "weekly";
+      });
+      
+      childrenSheet.appendRow(newRow);
+      result = { status: "success", message: "Child account recorded successfully." };
+    }
+    
+    else if (action === "uploadAvatarDirect") {
+      const uploadRes = uploadChildAvatar(payload.childId, payload.base64Data);
+      if (uploadRes.success) {
+        result = { status: "success", fileId: uploadRes.fileId };
+      } else {
+        throw new Error(uploadRes.error);
+      }
     }
     
   } catch (err) {
@@ -304,22 +338,25 @@ function isAuthenticatedDevice(fingerprint) {
   return false;
 }
 
-// --- 🌟 UPDATED INTEREST GENERATOR SUMMATION MATH TRACKING ---
+// --- 🌟 DYNAMIC INDIVIDUAL INTER-RATE GENERATOR ---
 function processMonthlyInterest() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const childrenSheet = ss.getSheetByName("children");
   const txSheet = ss.getSheetByName("transactions");
   if (!childrenSheet || !txSheet) return;
 
-  const MONTHLY_INTEREST_RATE = 0.005; 
+  const DEFAULT_INTEREST_RATE = 0.005; 
   const childData = childrenSheet.getDataRange().getValues();
-  const childHeaders = childData[0];
+  const childHeaders = childData[0].map(h => String(h).toLowerCase().trim());
+  
   const idIdx = childHeaders.indexOf("id");
-  const startAmountIdx = childHeaders.indexOf("startAmount");
+  const startAmountIdx = childHeaders.indexOf("startamount");
+  const rateIdx = childHeaders.indexOf("interestrate");
+  const statusIdx = childHeaders.indexOf("status");
 
   const txData = txSheet.getDataRange().getValues();
-  const txHeaders = txData[0];
-  const txChildIdIdx = txHeaders.indexOf("childId");
+  const txHeaders = txData[0].map(h => String(h).toLowerCase().trim());
+  const txChildIdIdx = txHeaders.indexOf("childid");
   const txTypeIdx = txHeaders.indexOf("type");
   const txAmountIdx = txHeaders.indexOf("amount");
 
@@ -327,8 +364,16 @@ function processMonthlyInterest() {
   const dateString = Utilities.formatDate(today, Session.getScriptTimeZone(), "yyyy-MM-dd");
 
   for (let i = 1; i < childData.length; i++) {
+    if (statusIdx !== -1 && String(childData[i][statusIdx]).trim() === "deactivated") continue;
+
     const childId = String(childData[i][idIdx]);
     const startAmount = Number(childData[i][startAmountIdx]) || 0;
+    
+    // 🌟 Adaptive Rate Selection: individual row value takes precedence over default standard
+    let activeChildRate = DEFAULT_INTEREST_RATE;
+    if (rateIdx !== -1 && childData[i][rateIdx] !== "") {
+      activeChildRate = Number(childData[i][rateIdx]);
+    }
 
     let netTransactions = 0;
     for (let j = 1; j < txData.length; j++) {
@@ -336,7 +381,6 @@ function processMonthlyInterest() {
         const type = String(txData[j][txTypeIdx]).toLowerCase().trim();
         const amount = Number(txData[j][txAmountIdx]) || 0;
         
-        // Weight mapping balance parameters including new values
         if (type === "deposit" || type === "receive") {
           netTransactions += amount;
         } else if (type === "withdrawal" || type === "send") {
@@ -348,40 +392,138 @@ function processMonthlyInterest() {
     const currentBalance = startAmount + netTransactions;
 
     if (currentBalance > 0) {
-      const interestEarned = Math.floor(currentBalance * MONTHLY_INTEREST_RATE * 100) / 100;
+      const interestEarned = Math.floor(currentBalance * activeChildRate * 100) / 100;
       if (interestEarned > 0) {
         const transactionId = "tx_interest_" + today.getTime() + "_" + childId;
         txSheet.appendRow([
-          transactionId, childId, dateString, "Monthly Interest Earned (" + (MONTHLY_INTEREST_RATE * 100) + "%)", "System Automated", "deposit", interestEarned, "System Scheduler", "", ""
+          transactionId, childId, dateString, "Monthly Interest Earned (" + (activeChildRate * 100) + "%)", "System Automated", "deposit", interestEarned, "System Scheduler", "", ""
         ]);
       }
     }
   }
 }
 
-function processWeeklyAllowances() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const childrenSheet = ss.getSheetByName("children");
-  const txSheet = ss.getSheetByName("transactions");
-  if (!childrenSheet || !txSheet) return;
-
-  const childData = childrenSheet.getDataRange().getValues();
-  const childHeaders = childData[0];
-  const idIdx = childHeaders.indexOf("id");
-  const allowanceIdx = childHeaders.indexOf("weeklyAllowance");
-
-  const today = new Date();
-  const dateString = Utilities.formatDate(today, Session.getScriptTimeZone(), "yyyy-MM-dd");
-
-  for (let i = 1; i < childData.length; i++) {
-    const childId = childData[i][idIdx];
-    const allowanceAmount = Number(childData[i][allowanceIdx]);
-
-    if (allowanceAmount > 0) {
-      const transactionId = "tx_auto_" + today.getTime() + "_" + childId;
-      txSheet.appendRow([
-        transactionId, childId, dateString, "Weekly Allowance", "System Automated", "deposit", allowanceAmount, "System Scheduler", "", ""
-      ]);
+function processIndividualAllowances() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var childrenSheet = ss.getSheetByName("children");
+  var transactionSheet = ss.getSheetByName("transactions");
+  
+  if (!childrenSheet || !transactionSheet) return;
+  
+  var data = childrenSheet.getDataRange().getValues();
+  var headers = data[0].map(h => String(h).toLowerCase().trim());
+  
+  var idIdx = headers.indexOf("id");
+  var statusIdx = headers.indexOf("status");
+  var amtIdx = headers.indexOf("allowanceamount");
+  var legacyAmtIdx = headers.indexOf("weeklyallowance"); 
+  var intervalIdx = headers.indexOf("allowanceinterval");
+  var nextDateIdx = headers.indexOf("allowancenextdate");
+  
+  var todayStr = new Date().toISOString().split('T')[0];
+  var today = new Date(todayStr);
+  
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    
+    if (statusIdx !== -1 && String(row[statusIdx]).trim() === "deactivated") continue;
+    
+    var childId = row[idIdx];
+    var nextDateValue = row[nextDateIdx];
+    
+    if (!nextDateValue) continue; 
+    
+    var nextPaymentDate = new Date(nextDateValue);
+    
+    if (today >= nextPaymentDate) {
+      var payoutAmount = Number(amtIdx !== -1 && row[amtIdx] !== "" ? row[amtIdx] : row[legacyAmtIdx]);
+      var interval = (intervalIdx !== -1 && row[intervalIdx]) ? String(row[intervalIdx]).toLowerCase().trim() : "weekly";
+      
+      if (payoutAmount > 0) {
+        var txHeaders = transactionSheet.getDataRange().getValues()[0].map(h => String(h).toLowerCase().trim());
+        let newTxRow = new Array(txHeaders.length).fill("");
+        
+        txHeaders.forEach((h, idx) => {
+          if (h === "id") newTxRow[idx] = "tx_auto_" + new Date().getTime() + "_" + childId;
+          else if (h === "childid") newTxRow[idx] = childId;
+          else if (h === "date") newTxRow[idx] = todayStr;
+          else if (h === "what") newTxRow[idx] = "Automated Allowance Payout";
+          else if (h === "where") newTxRow[idx] = "System Scheduler";
+          else if (h === "type") newTxRow[idx] = "deposit";
+          else if (h === "amount") newTxRow[idx] = payoutAmount;
+          else if (h === "recordedby") newTxRow[idx] = "System";
+        });
+        
+        transactionSheet.appendRow(newTxRow);
+      }
+      
+      var updatedDate = new Date(nextPaymentDate);
+      if (interval === "monthly") {
+        updatedDate.setMonth(updatedDate.getMonth() + 1);
+      } else {
+        updatedDate.setDate(updatedDate.getDate() + 7);
+      }
+      
+      var updatedDateStr = updatedDate.toISOString().split('T')[0];
+      childrenSheet.getRange(i + 1, nextDateIdx + 1).setValue(updatedDateStr);
     }
   }
+}
+
+function initializeDatabaseSchema() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  var avatarSheet = ss.getSheetByName("avatars");
+  if (!avatarSheet) {
+    avatarSheet = ss.insertSheet("avatars");
+    avatarSheet.appendRow(["id", "childid", "drivefileid", "uploadedat"]);
+  }
+  
+  var childrenSheet = ss.getSheetByName("children");
+  if (childrenSheet) {
+    var headers = childrenSheet.getRange(1, 1, 1, childrenSheet.getLastColumn()).getValues()[0].map(h => String(h).toLowerCase().trim());
+    var requiredColumns = [
+      "status", "aliases", "interestrate", "allowanceamount", 
+      "allowanceinterval", "allowancenextdate", "avatarfileid", "comment"
+    ];
+    
+    requiredColumns.forEach(function(colName) {
+      if (headers.indexOf(colName.toLowerCase()) === -1) {
+        childrenSheet.getRange(1, childrenSheet.getLastColumn() + 1).setValue(colName);
+      }
+    });
+  }
+}
+
+function uploadChildAvatar(childId, base64Data) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var avatarSheet = ss.getSheetByName("avatars");
+  var childrenSheet = ss.getSheetByName("children");
+  
+  var rawBase64 = base64Data.split(",")[1] || base64Data;
+  var blob = Utilities.newBlob(Utilities.base64Decode(rawBase64), "image/jpeg", "avatar_" + childId + "_" + Date.now() + ".jpg");
+  
+  var folders = DriveApp.getFoldersByName("KidsAccount_Avatars");
+  var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder("KidsAccount_Avatars");
+  
+  var file = folder.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  var driveFileId = file.getId();
+  
+  var nextAvatarId = "av_" + Date.now();
+  avatarSheet.appendRow([nextAvatarId, childId, driveFileId, new Date().toISOString()]);
+  
+  var childrenData = childrenSheet.getDataRange().getValues();
+  var headers = childrenData[0].map(h => String(h).toLowerCase().trim());
+  var idColIndex = headers.indexOf("id");
+  var avatarColIndex = headers.indexOf("avatarfileid");
+  
+  for (var i = 1; i < childrenData.length; i++) {
+    if (String(childrenData[i][idColIndex]) === String(childId)) {
+      childrenSheet.getRange(i + 1, avatarColIndex + 1).setValue(driveFileId);
+      break;
+    }
+  }
+  
+  return { success: true, fileId: driveFileId };
 }
