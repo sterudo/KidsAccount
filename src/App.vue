@@ -13,8 +13,16 @@
      <div class="user-selector-and-refresh-group"> 
 
           <div class="user-selector">
-            <label for="global-user" style="font-size: 12px;   letter-spacing: 0.5px;">User:</label>
-            <select id="global-user" v-model="currentUser" @change="saveUserPreference">
+            <label for="global-user" style="font-size: 12px;   letter-spacing: 0.5px;color: silver;">User:</label>
+            <select id="global-user" v-model="currentUser" @change="saveUserPreference" style="background: transparent;
+  border: none;
+    border-bottom-width: medium;
+    border-bottom-style: none;
+    border-bottom-color: currentcolor;
+  box-shadow: none;
+  border-bottom: none !important;
+  height: 25px;
+  font-weight: bold;" >
               <option v-for="user in users" :key="user" :value="user">{{ user }}</option>
             </select>
           </div>
@@ -67,7 +75,7 @@
                   <span class="childsName"  :class="(selectedChild.name == 'Eve') ? 'girl': ((selectedChild.name == 'Jason') ? 'boy-dark': 'tester')">{{ selectedChild.name }}</span>           
                   <span class="balancelabel">Balance</span>
                   <span class="currency" style="font-size:32px;  "> £</span>              
-                  <strong style="font-size:32px;text-shadow: white -1px -1px 1px, black 1px 1px 2px;">{{ calculateBalance(selectedChild.id).toFixed(2) }}</strong>
+                  <strong style="font-size:32px;text-shadow: black -2px -2px 1px, black 2px 2px 2px;">{{ calculateBalance(selectedChild.id).toFixed(2) }}</strong>
                 </div>    
             </div>  
         </div>
@@ -206,8 +214,9 @@
                 @click="toggleVoiceCapture" 
                 class="btn-mic-action"
                 :class="{ 'recording': isListening }"
-              >
+              ><span>
                 {{ isListening ? '🛑' : '🎤' }}
+              </span>
               </button>
 
      
@@ -603,7 +612,7 @@ import {
   getRawImageUrl
 } from './utils/helpers';
 import ActionMenu from '@/components/ActionMenu.vue';
-const appVersion = ref('0.32');
+const appVersion = ref('0.34');
 // Assure you have matching flags linked to control toggles:
 const isDebugEnabled = ref(false); // Controls local screen log views
 const debugMode = ref(false);
@@ -823,17 +832,17 @@ console.log("initializeAppCache");
   deviceFingerprint.value = generateDeviceFingerprint(); 
 
   const cachedData = localStorage.getItem(STORAGE_KEY);
-  if (cachedData) {
+ if (cachedData) {
     try {
       const parsed = JSON.parse(cachedData);
-      
-      // Hydrate local reactive state frameworks instantly from cache
       children.value = parsed.children || [];
       transactions.value = parsed.transactions || [];
       users.value = parsed.users || [];
       systemConfig.value = parsed.config || {};
       
-      // If valid data exists in LocalStorage, the device is implicitly authenticated
+      // 🌟 ADD THIS MAPPING HERE AS WELL:
+      cloudGeminiApiKey.value = systemConfig.value.geminiApiKey || systemConfig.value.gemini_api_key || '';
+      
       isAuthenticated.value = true;
       console.log("isAuthenticated");
       logToScreen("💾 Local Storage dataset loaded. Screen available instantly.");
@@ -877,7 +886,7 @@ async function fetchSyncDatabase(isBackground = false) {
     if (data.transactions) transactions.value = data.transactions;
     if (data.users) users.value = data.users;
     if (data.config) systemConfig.value = data.config;
-
+    cloudGeminiApiKey.value = data.config?.geminiApiKey || data.config?.gemini_api_key || '';
     // Save success timestamp
     lastSyncTimestamp.value = Date.now();
 

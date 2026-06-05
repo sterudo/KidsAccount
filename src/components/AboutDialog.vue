@@ -38,6 +38,8 @@
           <div class="meta-item">
             <p class="meta-label">Version History:</p>
             <div class="meta-value"><ul>
+                <li><strong>0.34</strong> - Visual improvements mainly Dashboard.</li>
+                <li><strong>0.33</strong> - API Key fixes.</li>
                 <li><strong>0.32</strong> - Child to Child transfer</li>
                 <li><strong>0.31</strong> - JSON export and import, Backup to Google Drive</li>
                 <li><strong>v0 - v0.30</strong> - PWA, Web, Offline mode and connectivity checker, AI features (Dictation, Camera, Location), Authentication, Responsiveness, mobile first</li>
