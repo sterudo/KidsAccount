@@ -1,3 +1,10 @@
+/**
+ * @OnlyCurrentDoc
+ * @NotOnlyCurrentDoc
+ * The line below forces the script to request Google Drive access scopes:
+ * @gsschema https://www.googleapis.com/auth/drive
+ */
+
 function doGet(e) {
   SpreadsheetApp.flush(); 
   
@@ -83,7 +90,7 @@ function doPost(e) {
   const childrenSheet = sheet.getSheetByName("children");
   
   let result = { status: "error", message: "Unknown process fault" };
-  
+
   try {
     if (!e || !e.postData || !e.postData.contents) {
       throw new Error("Missing structural JSON body payload rules");
@@ -93,42 +100,77 @@ function doPost(e) {
     const action = payload.action;
     
     // --- ACTIONS LAYER 1: APPEND NEW TRANSACTION ---
-    if (action === "addTransaction") {
-      const tx = payload.transaction;
-      
-      // Calculate dynamic headers dynamically to preserve structure positioning safety
+    // Inside your code.gs doPost(e) or action handler where appendRow runs:
+     if (action === "addTransaction" || action === "createTransaction") {
+      let fileUrl = "";
+
+      // Process the resized image upload to Drive if base64 data exists
+      if (payload.receiptImageBase64 && payload.receiptImageBase64.trim().length > 0) {
+        try {
+          const folderName = "KidsApp_Receipts";
+          let folders = DriveApp.getFoldersByName(folderName);
+          let folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+
+          const decodedBlob = Utilities.newBlob(
+            Utilities.base64Decode(payload.receiptImageBase64), 
+            "image/jpeg", 
+            "receipt_" + new Date().getTime() + ".jpg"
+          );
+          
+          const file = folder.createFile(decodedBlob);
+          file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+          fileUrl = file.getUrl(); 
+          
+        } catch (driveErr) {
+          fileUrl = "Upload Error: " + driveErr.toString();
+        }
+      }
+
+      // Fetch dynamic transactional columns to maintain an adaptive array structure
       const txHeaders = txSheet.getDataRange().getValues()[0].map(h => String(h).toLowerCase().trim());
-      const newRow = new Array(txHeaders.length).fill("");
-      
+      let newRow = new Array(txHeaders.length).fill(""); 
+
+      // Map transaction properties explicitly to their matching column indices
       txHeaders.forEach((header, index) => {
-        if (header === "id") newRow[index] = tx.id;
-        else if (header === "childid") newRow[index] = tx.childId;
-        else if (header === "date") newRow[index] = tx.date;
-        else if (header === "what") newRow[index] = tx.what;
-        else if (header === "where") newRow[index] = tx.where;
-        else if (header === "type") newRow[index] = tx.type;
-        else if (header === "amount") newRow[index] = Number(tx.amount) || 0;
-        else if (header === "recordedby") newRow[index] = tx.recordedBy;
-        else if (header === "devicefingerprint") newRow[index] = tx.deviceFingerprint;
-        else if (header === "utctimestamp") newRow[index] = tx.utcTimestamp || new Date().toISOString();
+        if (header === "id") newRow[index] = payload.id || "tx_" + new Date().getTime();
+        else if (header === "childid") newRow[index] = payload.childId;
+        else if (header === "date") newRow[index] = payload.date || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+        else if (header === "what") newRow[index] = payload.what;
+        else if (header === "where") newRow[index] = payload.where;
+        else if (header === "type") newRow[index] = payload.type;
+        else if (header === "amount") newRow[index] = Number(payload.amount) || 0;
+        
+        // Fallback normalization checks to capture both lowercased and mixed casing variants coming from the app
+        else if (header === "recordedby") newRow[index] = payload.recordedBy || payload.recordedby || "System";
+        else if (header === "devicefingerprint") newRow[index] = payload.fingerprint || payload.deviceFingerprint || payload.devicefingerprint || "-";
+        
+        else if (header === "utctimestamp") newRow[index] = payload.utcTimestamp || payload.utctimestamp || new Date().toISOString();
+        else if (header === "fileurl") newRow[index] = fileUrl; 
       });
-      
+
+      // Safe insertion execution
       txSheet.appendRow(newRow);
       result = { status: "success", message: "Transaction written to spreadsheet." };
     }
     
     // --- ACTIONS LAYER 2: UPDATE EXISTING TRANSACTION ROW ---
-    else if (action === "updateTransaction") {
-      const tx = payload.transaction;
+    else if (action === "updateTransaction" || action === "editTransaction") {
+      // 🌟 FIX: Fall back to payload itself if payload.transaction doesn't exist
+      const tx = payload.transaction || payload;
+      
       const data = txSheet.getDataRange().getValues();
       const txHeaders = data[0].map(h => String(h).toLowerCase().trim());
       const idIdx = txHeaders.indexOf("id");
       
       if (idIdx === -1) throw new Error("Could not find required tracking ID header cell in ledger sheet.");
       
+      // Safely grab the target transaction ID from whichever property casing variant arrived
+      const targetId = tx.id || payload.id;
+      if (!targetId) throw new Error("No transaction ID property found inside the request payload.");
+      
       let foundRowIndex = -1;
       for (let i = 1; i < data.length; i++) {
-        if (String(data[i][idIdx]).trim() === String(tx.id).trim()) {
+        if (String(data[i][idIdx]).trim() === String(targetId).trim()) {
           foundRowIndex = i + 1; // Translate to 1-based index numbering schema
           break;
         }
@@ -140,15 +182,17 @@ function doPost(e) {
       
       txHeaders.forEach((header, colIndex) => {
         const cell = txSheet.getRange(foundRowIndex, colIndex + 1);
-        if (header === "childid") cell.setValue(tx.childId);
+        if (header === "childid") cell.setValue(tx.childId || tx.childid);
         else if (header === "date") cell.setValue(tx.date);
         else if (header === "what") cell.setValue(tx.what);
         else if (header === "where") cell.setValue(tx.where);
         else if (header === "type") cell.setValue(tx.type);
         else if (header === "amount") cell.setValue(Number(tx.amount) || 0);
-        else if (header === "recordedby") cell.setValue(tx.recordedBy);
-        else if (header === "devicefingerprint") cell.setValue(tx.deviceFingerprint);
-        else if (header === "utctimestamp") cell.setValue(tx.utcTimestamp || new Date().toISOString());
+        
+        // Add flexible fallbacks for tracking identifiers 
+        else if (header === "recordedby") cell.setValue(tx.recordedBy || tx.recordedby || "");
+        else if (header === "devicefingerprint") cell.setValue(tx.deviceFingerprint || tx.fingerprint || tx.devicefingerprint || "-");
+        else if (header === "utctimestamp") cell.setValue(tx.utcTimestamp || tx.utctimestamp || new Date().toISOString());
       });
       
       result = { status: "success", message: "Transaction entry updated accurately." };

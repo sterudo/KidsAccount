@@ -8,7 +8,7 @@
 
   <h1 class="app-title"> 
     <button style="float:left;" v-if="currentScreen !== 'dashboard'" @click="backToDashboard"  class="btn btn-back-nav">⬅ Back</button> 
-    Kids Accounts  <span style="font-size:12px">v1.18</span>
+    Kids Accounts  <span style="font-size:12px">v1.21</span>
   </h1>
 
   <div id="app">
@@ -116,8 +116,34 @@
 
         <!-- VIEW 3: DASHBOARD (One Kid Per Row Layout) -->
         <section v-if="currentScreen === 'dashboard'" class="screen" style="margin-top: 20px;">
+          <div class="card help-tips-card">
+            <div class="help-card-header">
+              <h3>💡 Dashboard Quick Tips</h3>
+              <button type="button" class="btn-help-minimize" @click="toggleHelpState('dashboard')">
+                {{ hideHelpDashboard ? '➕ Show' : '➖ Hide' }}
+              </button>
+            </div>
+            <div v-if="!hideHelpDashboard" class="help-card-body animate-fade-in">
+              <ul>
+                <li><strong>🎤 Voice Dictation:</strong> Press the microphone icon to dictate entries effortlessly.<br>
+                  Say sequences like <em>"Add 5 Pounds to Evie"</em> for a deposit or<br>
+                  <em>"Remove 3.50 from Jason for sweets from an Off-liscence"</em> for a withdrawal.<br>
+                   <em>"Jason bought a toy from Tesco for 15 pounds 50"</em><br>
+                   <em>"Evie earned 10 pounds because she tidied her room."</em><br><br>
+                  At a minimum, ensure to include the <b>action</b> (Add/Remove), <b>amount</b>, and <b>child's name</b>.<br> 
+                  Nothing is submitted automatically; you will have the opportunity to review and confirm each transaction before it is recorded.
+                  </li>
+                <li><strong>🔄 Offline Data Protection:</strong> The application automatically saves your transactions locally in your browser memory cache if your signal drops, syncing back up automatically when you are back online.</li>
+                <li><strong>⚙️ User Controls:</strong> Make sure that you have selected the correct user (Mom/Dad) before performing any actions.</li>
+              </ul>
+            </div>
+          </div>
+
           <div class="card list-card">
             <h2>Children's Accounts</h2>
+            <div v-if="dashError" class="dashboard-error-banner" @click="dashError = ''">
+              <p>{{ dashError }}</p>
+            </div>
             <p v-if="children.length === 0" class="empty-state">No accounts created yet. Use the "+ Add Child" tab above.</p>
             
             <div v-else class="dashboard-rows-container">
@@ -150,7 +176,7 @@
       <code class="blueprint-syntax">
         <b style="color:red">Remove</b> <b style="color:white">X.Y</b> from <b style="color:yellow">child</b><br class="xbreak"> 
         for a <b style="color:cyan">what</b> from <b  style="color:orange">place</b>        
-        <button  style="display: inline-block; margin-left: 8px;font-size: 10px;border:1px solid silver;border-radius:3px"  type="button" @click="toggleExamples">{{ showExamples ? 'Hide Examples' : 'Show Examples' }}</button>
+        <button  class="showExBtn" type="button" @click="toggleExamples">{{ showExamples ? 'Hide Examples' : 'Show Examples' }}</button>
       </code>
       <p class="blueprint-example" v-if="showExamples">
         <p style="margin-bottom: 12px"><b style="color:lime">Add</b> <b style="color:white">X.Y</b> to <b style="color:yellow">child</b> for a <b style="color:cyan">what</b></p>
@@ -185,7 +211,7 @@
      
     </div>
 
-    <div v-if="voiceTranscript" class="voice-transcript-review">
+    <div v-if="showIfProblem" class="voice-transcript-review">
       <strong>Heard Text:</strong> "{{ voiceTranscript }}"
     </div>
 
@@ -206,10 +232,40 @@
 
         <!-- VIEW 4: LEDGER / STATEMENT DETAILED VIEW -->
         <section v-if="currentScreen === 'ledger' && selectedChild" class="screen">
+
+          <div v-if="selectedChild" class="card help-tips-card" style="margin-top: 12px;">
+            <div class="help-card-header">
+              <h3>💡 Ledger & Form Assistant Tips</h3>
+              <button type="button" class="btn-help-minimize" @click="toggleHelpState('detail')">
+                {{ hideHelpDetail ? '➕ Show' : '➖ Hide' }}
+              </button>
+            </div>
+            <div v-if="!hideHelpDetail" class="help-card-body animate-fade-in">
+              <div class="help-tips-grid">
+                <div>
+                  <h5>⚡ Form AI Accelerators:</h5>
+                  <ul>
+                    <li><strong>📸 AI Vision Lens:</strong> Take photos of items or receipts to automatically extract alternative names and pick out target transaction prices.</li>
+                    <li><strong>📍 GPS Geolocation Match:</strong> Tap the locator pin to look up real-world businesses nearby and auto-fill your storefront name.</li>
+                  </ul>
+                </div>
+                <div>
+                  <h5>📚 History Tools:</h5>
+                  <ul>
+                    <li><strong>✨ Past Match Dropdown:</strong> Tap the sparkle icons to view or toggle previous entries. Pressing it while it's open turns it into an <strong>✕</strong> to close the selection safely.</li>
+                    <li><strong>🖼️ In-App Receipt Lightbox:</strong> Click the inline 📸 button in any history row to open and view receipt images natively.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
        
           <!-- Transaction Input Form -->
           <div class="card form-card">
             <h3>Log New Transaction</h3>
+            <div v-if="showTranscript" class="voice-transcript-log">
+              <strong>🎤</strong> "{{ voiceTranscript }}"
+            </div>
             <form @submit.prevent="handleCreateTransaction" class="inline-form">
               <div class="form-group">
                 <label for="tx-date">Date</label>
@@ -257,18 +313,32 @@
                   @change="handleCameraCapture"
                 />
 
-                <div v-if="aiWhatSuggestions.length > 0" class="shop-suggestions-tray" style="margin-top: 6px;">
-                  <span class="suggestion-tray-title">AI Suggestions:</span>
-                  <button 
-                    type="button" 
-                    v-for="item in aiWhatSuggestions" 
-                    :key="item" 
-                    @mousedown.prevent="txForm.what = item; aiWhatSuggestions = []"
-                    class="badge-shop-suggestion"
-                  >
-                    ✨ {{ item }}
-                  </button>
-                  <button type="button" @click="aiWhatSuggestions = []" class="badge-shop-clear">✕</button>
+                <div v-if="aiWhatSuggestions.length > 0 || detectedBarcodeNumber" class="shop-suggestions-tray" style="margin-top: 6px;">
+                  <div v-if="aiWhatSuggestions.length > 0" style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center; width: 100%;">
+                    <span class="suggestion-tray-title">AI Suggestions:</span>
+                    <button 
+                      type="button" 
+                      v-for="item in aiWhatSuggestions" 
+                      :key="item" 
+                      @mousedown.prevent="txForm.what = item; aiWhatSuggestions = []"
+                      class="badge-shop-suggestion"
+                    >
+                      ✨ {{ item }}
+                    </button>
+                  </div>
+
+                  <div v-if="detectedBarcodeNumber" class="barcode-link-container" style="width: 100%; margin-top: 4px; padding-top: 4px; border-top: 1px dashed #223147;">
+                    <span class="suggestion-tray-title">Barcode Found: <code>{{ detectedBarcodeNumber }}</code></span>
+                    <a 
+                      :href="'https://www.barcodelookup.com/' + detectedBarcodeNumber" 
+                      target="_blank" 
+                      class="badge-barcode-link"
+                    >
+                      🔍 Open Barcode Lookup ↗
+                    </a>
+                  </div>
+
+                  <button type="button" @click="aiWhatSuggestions = []; detectedBarcodeNumber = ''" class="badge-shop-clear">✕</button>
                 </div>
 
                 <div v-if="activeHelper === 'what' && dynamicSuggestionsWhat.length > 0" class="helper-dropdown">
@@ -376,6 +446,7 @@
                 <div  class="text-left">Date</div>
                 <div class="text-left">Description</div>
                 <div class="text-left where">Where</div>
+                <div class="text-left where">Type</div>
                 <div class="text-right">Amount</div>
                 <template v-if="showMetaFields">
                   <div class="text-left">Recorded By</div>
@@ -403,16 +474,28 @@
                     'editing-row': editingTxId === tx.id, 
                     'clickable-last-row': isLastTransaction(tx.id) 
                   }"
-                  :style="showMetaFields ? 'grid-template-columns:100px 1fr 1fr 90px 130px 120px 120px' : 'grid-template-columns: 100px 1fr 1fr 90px'"
+                  :style="showMetaFields ? 'grid-template-columns:100px 1fr 1fr 90px 90px 130px 120px 120px' : 'grid-template-columns: 100px 1fr 1fr 90px 90px'"
                   @click="handleRowClick(tx)" >
                   <!-- Pinned Save Action Bar for desktop rows editing state controls -->
             
                   <!-- Row display logic / Form fields toggle during row selections -->
                   <template v-if="editingTxId !== tx.id">
                     <div class="text-left">{{ formatDate(tx.date) }}</div>
-                    <div class="text-left">{{ tx.what }}</div>
+                    <div class="text-left"><b>🛒</b> {{ tx.what }}
+                      <button 
+                        v-if="tx.fileUrl && tx.fileUrl.startsWith('http')" 
+                        type="button" 
+                        @click.stop="openImagePreviewModal(tx.fileUrl)" 
+                        class="btn-image-thumbnail-trigger"
+                        title="View Receipt inside App"
+                      >
+                        📸
+                      </button>
+                      <p class="onlyMobile locationP"><b v-if="tx.where != '-' &&  tx.where != ''">🏪</b> {{ tx.where }}</p>
+                    </div>
                     <div class="text-left where">{{ tx.where || '-' }}</div>
-                    <div class="text-right" :class="tx.type === 'deposit' ? 'pos-dark-text' : 'neg-text'">
+                    <div class="text-left where">{{ tx.type  }}</div>
+                    <div style="font-size: 16px !important;" class="text-right" :class="tx.type === 'deposit' ? 'pos-dark-text' : 'neg-text'">
                       {{ tx.type === 'deposit' ? '+' : '-' }}{{ formatCurrency(tx.amount) }}
                     </div>
                     <template v-if="showMetaFields">
@@ -446,11 +529,11 @@
               <!-- Pin Starting Balance cleanly to the absolute bottom of the list -->
               <div 
                 class="desktop-grid-row initial-balance-row"
-                :style="showMetaFields ? 'grid-template-columns:100px 1fr 1fr 90px 130px 120px 120px' : 'grid-template-columns: 100px 1fr 1fr 90px'" >
+                :style="showMetaFields ? 'grid-template-columns:100px 1fr 1fr 90px 90px 130px 120px 120px' : 'grid-template-columns: 100px 1fr 1fr 90px 90px'" >
                 <div>-</div>
                 <div><strong>Starting Balance</strong></div>
                 <div class="where">-</div>
-                <div class="text-right pos-dark-text">{{ formatCurrency(selectedChild.startAmount) }}</div>
+                <div class="text-right" :class="selectedChild.startAmount >= 0 ? 'pos-dark-text' : 'neg-text'">{{ formatCurrency(selectedChild.startAmount) }}</div>
                 <template v-if="showMetaFields">
                   <div>-</div><div>-</div><div>-</div>
                 </template>
@@ -465,6 +548,22 @@
     </div>
   </div>
 
+  <div v-if="isPreviewModalOpen" class="wait-scrim-overlay" @click="closeImagePreviewModal" style="z-index: 9999;">
+    <div class="image-preview-modal-card" @click.stop>
+      <div class="image-preview-header">
+        <h4>🖼️ Attached Receipt Image</h4>
+        <button type="button" @click="closeImagePreviewModal" class="btn-close-preview">✕</button>
+      </div>
+      
+      <div class="image-preview-body">
+        <img :src="activePreviewUrl" alt="Receipt Document" class="full-preview-img" />
+      </div>
+      
+      <div class="image-preview-footer">
+        <a :href="activePreviewUrl" target="_blank" class="btn-open-tab-fallback">Open External ↗</a>
+      </div>
+    </div>
+  </div>
 
 </template>
 
@@ -493,12 +592,15 @@ const editForm = ref({ date: '', what: '', where: '', type: 'withdrawal', amount
 const childForm = ref({ name: '', startAmount: 0, weeklyAllowance: 0 });
 const newUserFormName = ref('');
 const txForm = ref({ date: getTodayString(), what: '', where: '', type: 'withdrawal', amount: null });
+txForm.value.receiptImageBase64 = '';
 
+const showTranscript = ref(false);
 const filterType = ref('all');
 const filterText = ref('');
 const filterStartDate = ref('');
 const filterEndDate = ref('');
-
+const testOutput = ref(''); // For temporary testing outputs
+const detectedBarcodeNumber = ref('');
 // --- DATA ACCESS LAYER ---
 // Update your fetchSyncDatabase function to store it
 const lastSyncTime = ref(0); 
@@ -506,9 +608,11 @@ const lastSyncTime = ref(0);
 const isVoiceModalOpen = ref(false);
 const isListening = ref(false);
 const voiceTranscript = ref('');
+const showIfProblem = ref(false); // Flag to show transcript review only when needed
 const voiceLogs = ref([]); // 🌟 NEW: Array to hold on-screen telemetry logs
 const showExamples = ref((window.localStorage.getItem('showExamples') ?  ((window.localStorage.getItem('showExamples') === 'show') ? true : false) : true) );
 const cloudGeminiApiKey = ref('');
+const dashError = ref('');
 let recognition = null;
 
 
@@ -517,6 +621,44 @@ const isLocating = ref(false);
 const nearbyShopSuggestions = ref([]);
 const aiWhatSuggestions = ref([]);
 
+const isPreviewModalOpen = ref(false);
+const activePreviewUrl = ref('');
+
+// 💡 HELP CARD VISIBILITY CONTROLLER STATES
+const hideHelpDashboard = ref(localStorage.getItem('hide_help_dashboard') === 'true');
+const hideHelpDetail = ref(localStorage.getItem('hide_help_detail') === 'true');
+
+function toggleHelpState(targetView) {
+  if (targetView === 'dashboard') {
+    hideHelpDashboard.value = !hideHelpDashboard.value;
+    localStorage.setItem('hide_help_dashboard', hideHelpDashboard.value);
+    logToScreen(`Dashboard Help Card toggled. Visible: ${!hideHelpDashboard.value}`);
+  } else if (targetView === 'detail') {
+    hideHelpDetail.value = !hideHelpDetail.value;
+    localStorage.setItem('hide_help_detail', hideHelpDetail.value);
+    logToScreen(`Account Detail Help Card toggled. Visible: ${!hideHelpDetail.value}`);
+  }
+}
+
+function openImagePreviewModal(url) {
+  if (!url) return;
+  
+  // Transform native drive links into raw direct-embed source endpoints if needed
+  let streamableUrl = url;
+  if (url.includes('drive.google.com/file/d/')) {
+    const fileId = url.split('/file/d/')[1].split('/')[0];
+    streamableUrl = `https://lh3.googleusercontent.com/d/${fileId}`;
+  }
+
+  activePreviewUrl.value = streamableUrl;
+  isPreviewModalOpen.value = true;
+  logToScreen(`In-app receipt viewport launched for source: ${streamableUrl}`);
+}
+
+function closeImagePreviewModal() {
+  isPreviewModalOpen.value = false;
+  activePreviewUrl.value = '';
+}
 // --- 📸 CAMERA VISION ENGINE (WHAT SCANNER) ---
 function triggerCameraCapture() {
   const fileInput = document.getElementById('hiddenCameraInput');
@@ -525,40 +667,93 @@ function triggerCameraCapture() {
   }
 }
 
+
 function handleCameraCapture(event) {
   const file = event.target.files[0];
   if (!file) return;
 
   isLoading.value = true;
   aiWhatSuggestions.value = [];
-  logToScreen(`Camera Capture initialized: ${file.name} (${Math.round(file.size / 1024)} KB)`);
+  logToScreen(`Camera captured: ${file.name}. Commencing 400px downscaling pass...`);
 
   const reader = new FileReader();
-  reader.onloadend = async () => {
-    // Strip metadata headers to parse the raw clean Base64 string payload required by Gemini
-    const base64Data = reader.result.split(',')[1];
-    const mimeType = file.type;
+  reader.onload = (e) => {
+    const img = new Image();
+    img.onload = async () => {
+      // 📐 SCALE LOGIC: Maintain Aspect Ratio with a 400px constraint max
+      const MAX_DIMEN = 400;
+      let width = img.width;
+      let height = img.height;
 
-    await parseImageWithGeminiVision(base64Data, mimeType);
+      if (width > height) {
+        if (width > MAX_DIMEN) {
+          height = Math.round((height * MAX_DIMEN) / width);
+          width = MAX_DIMEN;
+        }
+      } else {
+        if (height > MAX_DIMEN) {
+          width = Math.round((width * MAX_DIMEN) / height);
+          height = MAX_DIMEN;
+        }
+      }
+
+      // Draw onto temporary off-screen Canvas asset
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Convert scaled frame back to Base64 (Using JPEG compression to drop byte weight)
+      const compressedBase64DataString = canvas.toDataURL("image/jpeg", 0.85);
+      const pureBase64Data = compressedBase64DataString.split(",")[1];
+
+      logToScreen(`Resize sequence optimized: Final resolution is ${width}x${height}px.`);
+
+      // 1. Kick off your existing Gemini parsing logic
+      await parseImageWithGeminiVision(pureBase64Data, "image/jpeg");
+
+      // 2. 🌟 NEW: Save this base64 image data into your txForm state so it uploads when saving the transaction!
+      txForm.value.receiptImageBase64 = pureBase64Data;
+    };
+    img.src = e.target.result;
   };
   reader.readAsDataURL(file);
-  event.target.value = ''; // Flush input memory tracking
+  event.target.value = '';
 }
 
 async function parseImageWithGeminiVision(base64Data, mimeType) {
   if (!cloudGeminiApiKey.value) {
-    logToScreen("❌ Error: Missing Gemini API key reference configuration mapping.");
+    alert("AI configuration data missing. Please refresh to sync credentials.");
     isLoading.value = false;
     return;
   }
 
-  logToScreen("Multimodal Engine: Uploading captured frame matrix to gemini-2.5-flash...");
+  logToScreen("Multimodal Pipeline: Analyzing image text, barcodes, and price data...");
   const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${cloudGeminiApiKey.value}`;
+
+  const structuralPrompt = `
+    Analyze this image. It is either a picture of an item bought by a child, a close-up of a product with a barcode/label, or a store receipt.
+    
+    Perform these extractions:
+    1. Descriptions: Come up with 3 short, clean alternative product description options (max 2-3 words each, e.g., 'Pokemon Cards', 'Chocolate Bar').
+    2. Price: Look for a clear price tag, receipt total, or item cost. Extract it as a raw floating-point number (e.g. 2.99). If no price is found, return null.
+    3. Barcode: Inspect the image closely for any standard visual linear retail barcode (EAN, UPC, or similar product barcode numbers). Read the explicit digits printed beneath or encoded in the lines and extract them as a pure string of numbers. If no barcode is visible, return null.
+
+    Output your response as a strict, valid JSON object with EXACTLY these keys:
+    {
+      "descriptions": ["Option One", "Option Two", "Option Three", "Option Four", "Option Five", "Option Six", "Option Seven"],
+      "detectedPrice": 1.99,
+      "barcode": "5012616291647"
+    }
+
+    CRITICAL RULE: Return ONLY the raw JSON block. No markdown formatting markers (\`\`\`json), no backticks, no extra conversational conversational context text.
+  `;
 
   const payload = {
     contents: [{
       parts: [
-        { text: "Analyze this picture. It is either an item a kid just bought, or a paper store receipt. If the barcode is visible, include it in the analysis. Come up with 3 short, clean alternative descriptions (max 2-5 words each, like 'Pokemon Cards' or 'Chocolate Bar' or 'Lego Set') that would fit beautifully into a ledger array. Output a strict JSON string array matching exactly this syntax layout: [\"Option One\", \"Option Two\", \"Option Three\", \"Option Four\", \"Option Five\", \"Option Six\", \"Option Seven\"]. Do not provide any conversational text, preamble, or markdown markdown tags." },
+        { text: structuralPrompt },
         {
           inlineData: {
             mimeType: mimeType,
@@ -579,14 +774,33 @@ async function parseImageWithGeminiVision(base64Data, mimeType) {
     const data = await response.json();
     const rawJsonText = data.candidates[0].content.parts[0].text.trim();
     
-    // Parse response cleanly into the suggestions array
-    const options = JSON.parse(rawJsonText);
-    aiWhatSuggestions.value = Array.isArray(options) ? options : [];
-    logToScreen(`Vision complete! Generated options: ${JSON.stringify(aiWhatSuggestions.value)}`);
+    // Safely parse the structured response
+    const parsedResult = JSON.parse(rawJsonText);
+    
+    // 1. Populate the Description Choices
+    if (parsedResult.descriptions && Array.isArray(parsedResult.descriptions)) {
+      aiWhatSuggestions.value = parsedResult.descriptions;
+    }
+
+    // 2. Populate the Barcode Number State Reference
+    if (parsedResult.barcode) {
+      detectedBarcodeNumber.value = String(parsedResult.barcode).trim();
+      logToScreen(`🏷️ Barcode detected by Vision: ${detectedBarcodeNumber.value}`);
+    } else {
+      detectedBarcodeNumber.value = '';
+    }
+
+    // 3. Populate price amount automatically ONLY if it hasn't been set yet (is 0 or empty)
+    if (parsedResult.detectedPrice && (!txForm.value.amount || Number(txForm.value.amount) === 0)) {
+      txForm.value.amount = Number(parsedResult.detectedPrice);
+      logToScreen(`💰 Price automatically populated: £${txForm.value.amount}`);
+    }
+
+    logToScreen(`Vision success! Data extracted: ${rawJsonText}`);
 
   } catch (err) {
-    console.error("Multimodal Vision Exception Error:", err);
-    logToScreen(`❌ Vision breakdown: ${err.message}`);
+    console.error("Gemini Vision Parsing Exception:", err);
+    logToScreen(`❌ Vision Engine broken: ${err.message}`);
   } finally {
     isLoading.value = false;
   }
@@ -774,7 +988,7 @@ function toggleVoiceCapture() {
         if (finalTranscript.trim().length > 0) {
           logToScreen("🧠 Dispatching raw text payload to Gemini-2.5-Flash...");
           await parseStructuralTranscriptWithAI(finalTranscript);
-          
+         
           // Auto close modal on successfully completing the transaction assignment loop
           isVoiceModalOpen.value = false;
           cleanupInstance();
@@ -844,7 +1058,7 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       // Send it off to gemini-2.5-flash
       await parseStructuralTranscriptWithAI(transcript);
     } else {
-      alert("No speech text detected. Please speak closer to your microphone phone node.");
+      dashError.value = "No speech text detected. Please speak closer to your microphone phone node.";
     }
   } 
 
@@ -867,9 +1081,10 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
 
 // 🧠 THE STRUCTURED AI PARSING PIPELINE
 async function parseStructuralTranscriptWithAI(text) {
+   dashError.value ="";
   // Check if the key has been synchronized yet
   if (!cloudGeminiApiKey.value) {
-    alert("Voice Engine Error: Gemini API key has not synchronized from the spreadsheet config yet.");
+    dashError.value = "Voice Engine Error: Gemini API key has not synchronized from the spreadsheet config yet.";
     return;
   }
   isLoading.value = true; // Engage your app's global cloud loading scrimmage overlay
@@ -897,6 +1112,15 @@ async function parseStructuralTranscriptWithAI(text) {
     3. "targetChildId": Match the mentioned [child] to one of these valid registered records: [ ${childMappingContext} ]. "Evie" is Eve. Output the exact string ID. If no match is found, use an empty string "".
     4. "what": The description corresponding to the "for a [what]" segment. Clean up capitalization.
     5. "where": The location or store corresponding to the "from [place]" segment. Clean up capitalization.
+    
+    if actionType is missing or cannot be determined, default to "withdrawal". If amount is missing or cannot be determined, default to 0. If what or where are missing, default to empty strings.
+    if actionType is deposit but what is empty, set what to "Extra Allowance" by default. 
+    if where is empty but actionType is deposit, set where to "Home" by default.
+
+    The only two children are Eve and Jason, so if the text mentions either name or a close variation, assign the correct child ID. If no child is mentioned, return an empty string for targetChildId.
+
+    A phrasing could also be like or similar to: Jason bought a toy from Tesco for 15 pounds 50 pence. In this case, actionType is withdrawal (because money is leaving the account), amount is 15.50, targetChildId matches Jason's ID, what is "toy", and where is "Tesco".  
+    or  Evie earned 10 pounds because she tidied her room. In this case, actionType is deposit (because money is entering the account), amount is 10.00, targetChildId matches Eve's ID, what is "tidy room", and where is "Home" (because it is a deposit with no location specified).
 
     CRITICAL RULES:
     - Respond with ONLY the raw JSON string block. No markdown markers (\`\`\`json), no wrap code accents, no conversational text.
@@ -932,17 +1156,21 @@ async function parseStructuralTranscriptWithAI(text) {
         // Navigate cleanly straight into the ledger form view so the user can review it
         currentScreen.value = 'ledger';
         isVoiceModalOpen.value = false; // Hide modal on complete parsing success
+        showTranscript.value = true;
       } else {
-        alert("AI was unable to distinctly identify which child this transaction belonged to. Please adjust manually.");
+        dashError.value = "AI was unable to distinctly identify which child this transaction belonged to. Please adjust manually or try again.";   
+        showIfProblem.value = true; // Show the transcript review section to the user in case they need to manually copy it over to the form
       }
     } else {
-      console.error("AI Parsing API Error:", responseData);
-      alert("AI Parsing Error: " + (responseData.error.message || "Unknown error occurred while parsing the spoken input."));
+      console.error("AI Parsing API Error:", responseData); 
+       showIfProblem.value = true;
+       dashError.value = "AI Parsing Error: " + (responseData.error.message || "Unknown error occurred while parsing the spoken input.");
     }
 
   } catch (error) {
-    console.error("AI Dictation Parser Failure:", error);
-    alert("Parsing Error: Could not cleanly break down spoken template values. Please enter manually.");
+    console.error("AI Dictation Parser Failure:", error);   
+    dashError.value ="Parsing Error: Could not cleanly break down spoken template values. Please enter manually or try again.";   
+    showIfProblem.value = true; 
   } finally {
     isLoading.value = false; // Clear loading scrim indicator
   }
@@ -982,9 +1210,9 @@ async function fetchSyncDatabase() {
         type: String(tx.type || 'withdrawal'),
         amount: isNaN(parseFloat(amt)) ? 0 : parseFloat(amt),
         recordedBy: String(tx.recordedby || tx.recordedBy || 'System'),
-        // 🌟 MATCHING THE HTML TARGET VARIABLES EXPLICITLY:
         deviceFingerprint: String(tx.device || tx.devicefingerprint || '-'),
-        utcTimestamp: String(tx.timestamp || tx.utctimestamp || '-')
+        utcTimestamp: String(tx.timestamp || tx.utctimestamp || '-'),
+        fileUrl: String(tx.fileurl || tx.fileUrl || '')
       };
     });
     
@@ -1012,6 +1240,7 @@ const authorizedDevices = ref([]);
 
 function backToDashboard() {
   selectedChildId.value = null;
+  txForm.value.receiptImageBase64 = '';
   currentScreen.value = 'dashboard';
   window.scrollTo(0,0);
 }
@@ -1302,7 +1531,7 @@ async function handleCreateTransaction() {
   }
   
   const newTx = {
-    action: "createTransaction",
+    action: "addTransaction",
     fingerprint: deviceFingerprint.value, // Pass validation tag
     id: 'tx_' + Date.now(),
     childId: String(selectedChildId.value),
@@ -1311,7 +1540,8 @@ async function handleCreateTransaction() {
     where: txForm.value.where || '-',
     type: txForm.value.type,
     amount: Number(txForm.value.amount),
-    recordedBy: currentUser.value
+    recordedBy: currentUser.value,    
+    receiptImageBase64: txForm.value.receiptImageBase64 || ""
   };
   
   isLoading.value = true;
@@ -1373,6 +1603,7 @@ function handleCreateUser() {
 function cancelInlineEdit() { editingTxId.value = null; }
 function getTodayString() { return new Date().toISOString().split('T')[0]; }
 function navigateToLedger(childId) {
+  showTranscript.value = false;
   selectedChildId.value = childId;
   txForm.value = { date: getTodayString(), what: '', where: '', type: 'withdrawal', amount: null };
   currentScreen.value = 'ledger';
@@ -1684,7 +1915,7 @@ input, select { padding: 6px !important; border: 1px solid var(--border-color); 
 }
 .desktop-grid-header {
   display: grid;
-  grid-template-columns:100px 1fr 1fr 90px;
+  grid-template-columns:100px 1fr 1fr 90px 90px;
   background: #101011;
   padding: 12px;
   font-weight: bold;
@@ -1692,14 +1923,16 @@ input, select { padding: 6px !important; border: 1px solid var(--border-color); 
   border-bottom: 2px solid var(--border-color);
 }
 .desktop-grid-header.with-meta {
-  grid-template-columns: 100px 1fr 1fr 90px 130px 120px 120px;
+  grid-template-columns: 100px 1fr 1fr 90px 90px 130px 120px 120px;
 }
 .desktop-grid-row {
   display: grid;
-  padding: 12px;
+  padding: 8px;
   border-bottom: 1px solid var(--border-color);
   align-items: center;
   font-size: 0.95rem;
+  padding-top: 2px;
+  padding-bottom: 2px;
 }
 .desktop-grid-row:nth-child(even) { background: #505051; }
 
@@ -2156,10 +2389,10 @@ display: grid;
 }
 
 .btn-mic-action {
-  width: 80px;
+  width: 100%;
   height: 80px;
-  border-radius: 50%;
-  background: #4338ca;
+  border-radius: 10px;
+  background: #173781;
   border: none;
   font-size: 2rem;
   color: white;
@@ -2170,12 +2403,13 @@ display: grid;
   z-index: 2;
   transition: all 0.2s ease;
   box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7);
-  margin:8px;
+  margin: 8px;
 }
 
 .btn-mic-action.recording {
   background: #ef4444;
   transform: scale(0.95);
+   z-index: 2;
 }
 
 .action-hint-text {
@@ -2188,13 +2422,14 @@ display: grid;
 
 /* Audio Wave Pulse Animation Ring */
 .pulse-ring {
-  position: absolute;
-  width: 80px;
+position: absolute;
+  width: calc(100% - 140px);
   height: 80px;
-  border-radius: 50%;
+  border-radius: 10px;
   background: rgba(239, 68, 68, 0.4);
   animation: wavePulse 1.8s infinite ease-out;
   z-index: 1;
+  left: 140px;
 }
 
 @keyframes wavePulse {
@@ -2211,6 +2446,17 @@ display: grid;
   border-left: 3px solid #818cf8;
   color: #cbd5e1;
   margin-top: 16px;
+}
+.voice-transcript-log {
+background: #001331;
+    padding: 5px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    border-left: 0px solid #818cf8;
+    color: #cbd5e1;
+    margin-top: 2px;
+    text-align: left;
+    font-style: italic;
 }
 .xbreak {
   display: none;
@@ -2279,8 +2525,265 @@ display: grid;
   color: #ef4444 !important;
 }
 
+/* Barcode external lookup links template badges */
+.barcode-link-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.barcode-link-container code {
+  background: #1e293b;
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: #38bdf8;
+}
+
+.badge-barcode-link {
+  background: #047857 !important;
+  color: #ecfdf5 !important;
+  border: 1px solid #059669 !important;
+  padding: 4px 12px !important;
+  font-size: 11px !important;
+  border-radius: 4px !important;
+  text-decoration: none !important;
+  font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  transition: all 0.15s ease;
+}
+
+.badge-barcode-link:hover {
+  background: #059669 !important;
+  transform: translateY(-1px);
+}
+
+/* Tiny inline trigger button inside list row */
+.btn-image-thumbnail-trigger {
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  padding: 1px 4px;
+  font-size: 11px;
+  margin-left: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  transition: all 0.1s ease;
+}
+
+.btn-image-thumbnail-trigger:hover {
+  background: #334155;
+  transform: scale(1.1);
+}
+
+/* Modal Card Overrides for Image Previews */
+.image-preview-modal-card {
+  background: #0f172a !important;
+  border: 1px solid #334155 !important;
+  max-width: 90vw !important;
+  width: 380px !important;
+  padding: 16px !important;
+  border-radius: 12px !important;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.image-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #1e293b;
+  padding-bottom: 8px;
+}
+
+.image-preview-header h4 {
+  margin: 0;
+  color: #f1f5f9;
+}
+
+.btn-close-preview {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.btn-close-preview:hover {
+  color: #ef4444;
+}
+
+.image-preview-body {
+  width: 100%;
+  max-height: 60vh;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #020617;
+  border-radius: 6px;
+  border: 1px solid #1e293b;
+}
+
+.full-preview-img {
+  max-width: 100%;
+  max-height: 60vh;
+  object-fit: contain; /* Ensures photo keeps true aspect ratio rules inside container bounds */
+  display: block;
+}
+
+.image-preview-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.onlyMobile {
+  display:none;
+}
+
+.dashboard-error-banner {
+  background: #500d0d;
+    color: #ffa7a7;
+    padding: 12px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.showExBtn {
+  display: inline;
+    margin-left: 8px;
+    font-size: 12px;
+    border: 1px solid #000000;
+    border-radius: 3px;
+    background: #334;
+    color: silver;
+    float: right;
+  margin-top: 8px;
+}
+
+/* 💡 Modern Help Tips Card Styles Layout */
+.help-tips-card {
+  background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%) !important;
+  border: 1px solid #312e81 !important;
+  padding: 8px !important;
+  margin-bottom: 5px;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+}
+
+.help-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.help-card-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #c7d2fe;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-help-minimize {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #94a3b8;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.btn-help-minimize:hover {
+  background: #334155;
+  color: #f1f5f9;
+}
+
+.help-card-body {
+  margin-top: 12px;
+  border-top: 1px dashed #2e384d;
+  padding-top: 10px;
+}
+
+.help-card-body ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.help-card-body li {
+  font-size: 0.95rem;
+  color: #cbd5e1;
+  margin-bottom: 6px;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.help-card-body em {
+  color: #a5b4fc;
+  background: #111827;
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-style: normal;
+}
+
+/* 2-Column Split for the advanced feature details views */
+.help-tips-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.help-tips-grid h5 {
+  margin: 0 0 6px 0;
+  font-size: 0.85rem;
+  color: #818cf8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Tiny fade-in wrapper transition utility */
+.animate-fade-in {
+  animation: helpFadeIn 0.2s ease-out forwards;
+}
+
+@keyframes helpFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Responsive collapse rule for smaller smartphone sizes */
+@media (max-width: 650px) {
+  .help-tips-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
 /* Ensure mobile stacking rules do not distort header utilities button configurations */
 @media (max-width: 600px) {
+
+  .locationP {
+    margin: 0px;
+  padding: 0px;
+  position: relative;
+  top: -5px;
+  color: #9db5db;
+  font-style: italic;
+  }
+
+  .onlyMobile {
+  display:block;
+}
 
   .blueprint-syntax {
     font-size: 1.4em;
