@@ -7,8 +7,38 @@
   </div>
 
   <h1 class="app-title"> 
-    <button style="float:left;" v-if="currentScreen !== 'dashboard'" @click="backToDashboard"  class="btn btn-back-nav">⬅ Back</button> 
-    Kids Accounts  <span style="font-size:12px">v1.25</span>
+    <button style="float:left;position: absolute; left: 0px;" v-if="currentScreen !== 'dashboard'" @click="backToDashboard"  class="btn btn-back-nav">⬅ Back</button> 
+    <span style="white-space: nowrap;" class="h1s">Kids Accounts  <span class="versionno">v0.27</span></span>      
+
+     <div class="user-selector-and-refresh-group"> 
+
+          <div class="user-selector">
+            <label for="global-user" style="font-size: 12px;   letter-spacing: 0.5px;">User:</label>
+            <select id="global-user" v-model="currentUser" @change="saveUserPreference">
+              <option v-for="user in users" :key="user" :value="user">{{ user }}</option>
+            </select>
+          </div>
+        </div>
+
+    <div>
+      <ActionMenu 
+      :debug-mode="isDebugEnabled"
+      :show-help="isSpeechHelpVisible"
+      @navigate="(screen) => currentScreen = screen"
+      @refresh="fetchSyncDatabase"
+      @toggle-debug="isDebugEnabled = !isDebugEnabled"
+      @toggle-help="isSpeechHelpVisible = !isSpeechHelpVisible"
+    />
+      <button 
+        type="button" 
+        @click="isAboutOpen = true" 
+        class="btn-about-trigger" 
+        title="Application Information"
+      >
+        🤑
+      </button>
+ 
+    </div>
   </h1>
 
   <div id="app">
@@ -23,28 +53,7 @@
     <div v-else>
       <!-- GLOBAL TOP NAV BAR -->
       <header class="app-header">
-    
-        <div class="nav-and-back-group">
-          <button @click="currentScreen = 'addChildSettings'" class="dbb btn" :class="currentScreen === 'addChildSettings' ? 'btn-primary' : 'btn-secondary'">+ Add Child</button>
-          <button @click="currentScreen = 'addUserSettings'" class="dbb btn" :class="currentScreen === 'addUserSettings' ? 'btn-primary' : 'btn-secondary'">+ Add User</button>
-        </div>
-      
-        <div class="user-selector-and-refresh-group">
-
-          <button type="button" @click="fetchSyncDatabase" class="btn btn-refresh-sync" :disabled="isLoading">
-            {{ isLoading ? '⏳ Loading' : '🔄 Refresh' }}
-          </button>
-
-          <button v-if="currentScreen === 'dashboard'" class="dbgBtn" type="button" @click="debugMode = !debugMode">{{ debugMode ? 'Disable Debug' : 'Enable Debug' }}</button>
-
-          <div class="user-selector">
-            <label for="global-user">User:</label>
-            <select id="global-user" v-model="currentUser" @change="saveUserPreference" style="padding:3px !important;color:silver;">
-              <option v-for="user in users" :key="user" :value="user">{{ user }}</option>
-            </select>
-          </div>
-        </div>
-
+               
         <div  v-if="currentScreen === 'ledger' && selectedChild"  class="ledger-header">
             <div class="child-summary">
                 <img :src="(selectedChild.name == 'Eve') ? 'eve250.png' :((selectedChild.name == 'Jason') ? 'jason250.png' : 'default.png')" width="60" height="60" class="rowimg"/>
@@ -85,7 +94,7 @@
 
         <!-- VIEW 3: DASHBOARD (One Kid Per Row Layout) -->
         <section v-if="currentScreen === 'dashboard'" class="screen" style="margin-top: 20px;">
-          <div class="card help-tips-card">
+          <div class="card help-tips-card" v-if="isSpeechHelpVisible">
             <div class="help-card-header">
               <h3>💡 Dashboard Quick Tips</h3>
               <button type="button" class="btn-help-minimize" @click="toggleHelpState('dashboard')">
@@ -102,14 +111,12 @@
                   At a minimum, ensure to include the <b>action</b> (Add/Remove), <b>amount</b>, and <b>child's name</b>.<br> 
                   Nothing is submitted automatically; you will have the opportunity to review and confirm each transaction before it is recorded.
                   </li>
-                <li><strong>🔄 Offline Data Protection:</strong> The application automatically saves your transactions locally in your browser memory cache if your signal drops, syncing back up automatically when you are back online.</li>
                 <li><strong>⚙️ User Controls:</strong> Make sure that you have selected the correct user (Mom/Dad) before performing any actions.</li>
               </ul>
             </div>
           </div>
 
-          <div class="card list-card">
-            <h2>Children's Accounts</h2>
+          <div class="card list-card">            
             <div v-if="dashError" class="dashboard-error-banner" @click="dashError = ''">
               <p>{{ dashError }}</p>
             </div>
@@ -140,7 +147,7 @@
           </div>
            <div class="voice-modal-card" @click.stop>
   
-              <div class="voice-blueprint-box">
+              <div class="voice-blueprint-box" v-if="isSpeechHelpVisible">
                 <p class="blueprint-title">🗣️ Spoken Sentence Guide:</p>
                 <code class="blueprint-syntax">
                   <b style="color:red">Remove</b> <b style="color:white">X.Y</b> from <b style="color:yellow">child</b><br class="xbreak"> 
@@ -174,6 +181,7 @@
               >
                 {{ isListening ? '🛑' : '🎤' }}
               </button>
+
      
             </div>
 
@@ -181,7 +189,7 @@
               <strong>Heard Text:</strong> "{{ voiceTranscript }}"
             </div>
 
-            <div class="voice-debug-console" v-if="debugMode">
+            <div class="voice-debug-console" v-if="isDebugEnabled">
               <div class="debug-console-header">
                 <span>📋 System Activity Log:</span>
                 <button type="button" @click="voiceLogs = []" class="btn-clear-logs">Clear</button>
@@ -199,7 +207,7 @@
         <!-- VIEW 4: LEDGER / STATEMENT DETAILED VIEW -->
         <section v-if="currentScreen === 'ledger' && selectedChild" class="screen">
 
-          <div v-if="selectedChild" class="card help-tips-card" style="margin-top: 12px;">
+          <div v-if="selectedChild && isSpeechHelpVisible" class="card help-tips-card" style="margin-top: 12px;">
             <div class="help-card-header">
               <h3>💡 Ledger & Form Assistant Tips</h3>
               <button type="button" class="btn-help-minimize" @click="toggleHelpState('detail')">
@@ -228,7 +236,7 @@
        
           <!-- Transaction Input Form -->
           <div class="card form-card">
-            <h3>Log New Transaction</h3>
+            <h3 style="margin-top: 10px;">Log New Transaction</h3>
             <div v-if="showTranscript" class="voice-transcript-log">
               <strong>🎤</strong> "{{ voiceTranscript }}"
             </div>
@@ -519,6 +527,9 @@
     :image-url="activePreviewUrl"
     @close="closeImagePreviewModal"
   />
+
+
+  <AboutDialog :is-open="isAboutOpen" @close="isAboutOpen = false" />
 </template>
 
 <script setup>
@@ -526,6 +537,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import ImageLightbox from '@/components/ImageLightbox.vue';
 import AddChildSettings from '@/components/AddChildSettings.vue';
 import AddUserSettings from '@/components/AddUserSettings.vue';
+import AboutDialog from '@/components/AboutDialog.vue';
 import { 
   formatCurrency, 
   formatDate, 
@@ -533,11 +545,19 @@ import {
   generateDeviceFingerprint, 
   appendScreenLog 
 } from './utils/helpers';
+import ActionMenu from '@/components/ActionMenu.vue';
 
+// Assure you have matching flags linked to control toggles:
+const isDebugEnabled = ref(false); // Controls local screen log views
+const debugMode = ref(false);
+const isSpeechHelpVisible = ref(false); // Controls collapsed help view block
+
+// Reactive toggle controlling the visibility layout frame
+const isAboutOpen = ref(false);
 // paste your Google App Script deployed endpoint web app URL here
 const SHEET_API_URL = 'https://script.google.com/macros/s/AKfycbzg05Y22_KksejVZzQBeq0coDyFn4LvMAbKnsijv8x9LJqaUyCAL-AuK4kPOorm6S0P/exec';
 
-const debugMode = ref(false);
+
 const currentScreen = ref('dashboard');
 const selectedChildId = ref(null);
 const showMetaFields = ref(false);

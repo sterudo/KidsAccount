@@ -29,19 +29,36 @@ body {
     padding: 0px;
 }
 
-h1 {
-    font-size: 40px;
+
+h1 { 
     letter-spacing: -1.68px;
     margin: 0px;
     margin-top: 0px;
     color: white;
     margin-top: 0px;
-    background: #002754;
-    padding: 19px;
+    background: #002754;  
     position: sticky;
     top: 0px;
     z-index: 1000;
     margin-bottom: -7px;
+    display: grid;
+    grid-template-columns: 1fr  min-content 86px;
+    justify-items: start;
+    align-items:center;
+    padding: 4px;
+    font-size: 24px;
+    padding-left: 60px !important;
+    text-align: left;
+    max-height: 40px;
+}
+
+.versionno {
+    font-size: 12px;
+    letter-spacing: 1px;
+    position: absolute;
+    top: -4px;
+    left: 132px;
+    color: green;
 }
 
 h2 {
@@ -72,6 +89,20 @@ select {
     padding: 6px !important;
     background: #131216;
     color: white !important;
+}
+
+
+.modal-overlay {
+    padding:0px !important;
+}
+
+select#global-user { 
+
+    width: min-content;
+    font-size: 12px;
+    height: 28px;
+    padding: 0px !important;
+    margin: 0px;
 }
 
 /* Screen-Blocking Wait Scrim */
@@ -157,7 +188,7 @@ select {
     margin-bottom: 0px;
     gap: 12px;
     position: sticky;
-    top: 60px;
+    top: 43px;
     background: #17192d;
     z-index: 1000;
     flex-wrap: wrap;
@@ -187,10 +218,10 @@ select {
 }
 
 .user-selector {
-    display: flex;
-    align-items: center;
+    display: grid;
+    align-items: start;   
     gap: 8px;
-    font-weight: bold;
+    grid-template-columns: min-content min-content;
 }
 
 .card {
@@ -499,7 +530,7 @@ select {
 }
 .pos-dark-dark {
     color: #71ffaa;
-    background-color: #184732;
+    background-color: #143b0e;
     font-weight: bold;
 }
 .neg-dark-dark {
@@ -654,15 +685,25 @@ button.Withdraw {
     box-shadow: 1px 1px 1px gray;
 }
 
+.balance-badge {
+        padding-top: 12px !important;
+        padding-bottom: 2px !important;
+        margin-bottom: 2px;
+        padding: 8px;
+        border-top: 2px solid black;
+        display: grid;
+        grid-template-columns: 1fr min-content min-content min-content;
+        gap: 8px;
+        padding-bottom: 8px !important;
+    }
+
+    section.screen {
+    margin-top: 2px;
+}
 /* --- TWO-ROW-PER-TRANSACTION MOBILE LAYOUT RULES --- */
 @media (max-width: 600px) {
     .dbb {
         display: none;
-    }
-
-    h1 {
-        padding: 4px;
-        font-size: 28px;
     }
 
     h3 {
@@ -675,7 +716,7 @@ button.Withdraw {
     }
 
     .balance-badge {
-        padding-top: 2px !important;
+        padding-top: 12px !important;
         padding-bottom: 2px !important;
         margin-bottom: 2px;
         padding: 8px;
@@ -683,7 +724,7 @@ button.Withdraw {
         display: grid;
         grid-template-columns: 1fr min-content min-content min-content;
         gap: 8px;
-        padding-bottom: 5px !important;
+        padding-bottom: 8px !important;
     }
 
     .filter-header-row {
@@ -723,19 +764,6 @@ button.Withdraw {
         text-align: center;
     }
 
-    .user-selector {
-        width: 100%;
-        box-sizing: border-box;
-        justify-content: space-between;
-        padding-bottom: 2px;
-        border: 0px solid var(--border-color);
-        border-radius: 0px;
-    }
-    .user-selector select {
-        width: 65%;
-        padding: 4px;
-    }
-
     .child-row-layout {
         flex-direction: column;
         align-items: stretch;
@@ -751,7 +779,7 @@ button.Withdraw {
 
     .inline-form {
         display: grid;
-        gap: 0px 16px;
+        gap: 6px 16px;
         align-items: flex-end;
         grid-template-columns: 150px 1fr;
     }
@@ -765,7 +793,7 @@ button.Withdraw {
     .form-group label {
         position: relative;
         top: 2px !important;
-        color: silver;
+        color: #92b5e2;
     }
 
     /* Mobile Stack List */
@@ -858,12 +886,6 @@ button.Withdraw {
 }
 
 /* Header alignment adjustments for user selector + refresh button layout combo */
-.user-selector-and-refresh-group {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
 .btn-refresh-sync {
     background: var(--secondary);
     border: 1px solid var(--border-color);
@@ -897,8 +919,8 @@ button.Withdraw {
 }
 .rowimg {
     position: absolute;
-    top: 47px;
-    left: 110px;
+           top: -6px;
+        left:85px
 }
 
 .voice-card {
@@ -1363,16 +1385,62 @@ button.Withdraw {
     }
 }
 
-/* Responsive collapse rule for smaller smartphone sizes */
-@media (max-width: 650px) {
-    .help-tips-grid {
+
+
+
+
+/* About Dialog */
+.app-main-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 20px;
+  background-color: #0f172a;
+  border-bottom: 1px solid #1e293b;
+}
+
+.header-actions-section {
+  display: flex;
+  align-items: center;
+}
+
+.btn-about-trigger {
+  background: none;
+  border: none;
+  font-size: 1.7rem;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  line-height: 1;
+  transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  opacity: 0.7;
+}
+
+.btn-about-trigger:hover {
+  transform: scale(1.15) rotate(5deg);
+  opacity: 1;
+}
+
+.btn-about-trigger:active {
+  transform: scale(0.95);
+}
+
+.about-card {
+    box-sizing: border-box;
+    margin: 5px;
+}
+
+
+
+
+
+/* Ensure mobile stacking rules do not distort header utilities button configurations */
+
+@media (max-width: 600px) {
+      .help-tips-grid {
         grid-template-columns: 1fr;
         gap: 12px;
     }
-}
-
-/* Ensure mobile stacking rules do not distort header utilities button configurations */
-@media (max-width: 600px) {
     .locationP {
         margin: 0px;
         padding: 0px;
@@ -1414,24 +1482,19 @@ button.Withdraw {
     }
     .rowimg {
         position: absolute;
-        top: 6px;
-        left: 100px;
+        top: -6px;
+        left: 85px
     }
     .nav-and-back-group {
         display: none;
     }
-    .user-selector-and-refresh-group {
-        width: 100%;
-        justify-content: space-between;
-        padding-top: 4px;
-        border-top: 1px solid var(--border-color);
-    }
-    .user-selector {
-        width: auto;
-        flex: 1;
-        justify-content: flex-end;
-    }
-    .user-selector select {
-        width: 110px;
-    }
+
+
+}
+
+
+@media (max-width: 370px) {
+  .h1s {
+    font-size: 16px !important;
+  }
 }
