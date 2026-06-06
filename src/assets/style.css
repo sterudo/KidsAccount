@@ -1631,6 +1631,102 @@ button.Withdraw {
 .tile-dark-blue  { background-color: #182848; }
 .tile-dark-green { background-color: #143b0e; }
 .tile-dark-red   { background-color: #4a0108; }
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* --- 📸 INTERACTIVE STUDIO STYLING THEMES --- */
+.avatar-workspace-container {
+  background: #0f172a;
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px dashed #475569;
+  margin-bottom: 20px;
+}
+
+.avatar-current-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.cropper-studio {
+  margin-top: 15px;
+  background: #020617;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #1e293b;
+}
+
+.cropper-canvas-wrapper {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  user-select: none;
+  cursor: crosshair;
+}
+
+.source-render-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/* Bounding box circle lens track overlay framework components */
+.crop-lens-overlay {
+  position: absolute;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6); /* Generates the darkened outer frame border effect */
+  border-radius: 50%; /* Cuts framing line circle track */
+  cursor: move;
+  box-sizing: border-box;
+}
+
+/* Optional helper frame element to show the square bounds inside the circle */
+.crop-lens-overlay::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  border: 1px dashed rgba(255, 255, 255, 0.4);
+  border-radius: 0; /* Keeps clear inline visibility guides */
+  pointer-events: none;
+}
+
+/* Diagonal Scale Resizer Control node point */
+.lens-resize-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: #38bdf8;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  bottom: -4px;
+  right: -4px;
+  cursor: nwse-resize;
+  z-index: 10;
+}
+
+.cropper-actions-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+}
+
+
+
+
+
 /* Ensure mobile stacking rules do not distort header utilities button configurations */
 
 @media (max-width: 600px) {

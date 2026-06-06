@@ -68,9 +68,13 @@
                
         <div  v-if="currentScreen === 'ledger' && selectedChild"  class="ledger-header">
             <div class="child-summary">
-                <img :src="(selectedChild.name == 'Eve') ? 'eve250.png' :((selectedChild.name == 'Jason') ? 'jason250.png' : 'default.png')" width="60" height="60" class="rowimg"
+              <img :src="selectedChild.avatarfileid ? `https://drive.google.com/thumbnail?sz=w500&id=${selectedChild.avatarfileid}` : 'https://placehold.co/100x100?text=Face'"
+              width="60" height="60" class="rowimg"
+                @click.stop="openProfileEditor(selectedChild)"  />
+                <!-- img :src="(selectedChild.name == 'Eve') ? 'eve250.png' :((selectedChild.name == 'Jason') ? 'jason250.png' : 'default.png')" 
+                width="60" height="60" class="rowimg"
                 @click.stop="openProfileEditor(selectedChild)" 
-                />
+                /-->
                 <div 
                  :style="`border-bottom: 2px solid ${selectedChild.accentcolor} !important;`"                
                     class="balance-badge" :class="calculateBalance(selectedChild.id) >= 0 ? 'pos-dark-dark' : 'neg-dark-dark'">
@@ -164,8 +168,10 @@
             <div v-else class="dashboard-rows-container">
               <div v-for="child in children" :key="child.id" class="child-row-layout">
                 <div class="child-row-click-area" @click="navigateToLedger(child.id)">
-                 
-                  <img :src="(child.name == 'Eve') ? 'eve250.png' : ((child.name == 'Jason') ? 'jason250.png' : 'default.png')" class="child-avatar" width="60" height="60" style="flex-basis:1;margin-right:10px;" />
+                    <img :src="child.avatarfileid ? `https://drive.google.com/thumbnail?sz=w500&id=${child.avatarfileid}` : 'https://placehold.co/100x100?text=Face'"
+                     class="child-avatar" width="60" height="60" style="flex-basis:1;margin-right:10px;"/>
+                  <!-- img :src="(child.name == 'Eve') ? 'eve250.png' : ((child.name == 'Jason') ? 'jason250.png' : 'default.png')" 
+                   class="child-avatar" width="60" height="60" style="flex-basis:1;margin-right:10px;" /-->
                   <div class="child-row-info" style="flex-basis: 100%;  text-align: left;">                    
                     <h3 :style="`color:${child.accentcolor};`">{{ child.name }} </h3>
                     <span class="allowance-label" style="text-align:left;"><span style="font-size: 12px;" class="allowance-label-text">Allowance:</span>
@@ -641,7 +647,7 @@ import {
   getRawImageUrl
 } from './utils/helpers';
 import ActionMenu from '@/components/ActionMenu.vue';
-const appVersion = ref('0.37');
+const appVersion = ref('0.38');
 // Assure you have matching flags linked to control toggles:
 const isDebugEnabled = ref(false); // Controls local screen log views
 const debugMode = ref(false);
@@ -752,7 +758,6 @@ const childForm = ref({
 // Image Crop Workspace Reference Handles
 const imageFileInput = ref(null);
 const cropCanvas = ref(null);
-const isCroppingActive = ref(false);
 let rawImageElement = null; // Memory allocation handle for image files
 
 onMounted(() => {
@@ -1624,9 +1629,10 @@ const baseFilteredTransactions = computed(() => {
     })
     .sort((a, b) => {
       // Safe timestamp conversion fallback for sorting
-      const timeA = a.id ? String(a.id).replace('tx_', '') : 0;
-      const timeB = b.id ? String(b.id).replace('tx_', '') : 0;
-      return String(timeB).localeCompare(String(timeA));
+      //const timeA = a.id ? String(a.id).replace('tx_', '') : 0;
+      //const timeB = b.id ? String(b.id).replace('tx_', '') : 0;
+      // return String(timeB).localeCompare(String(timeA));
+      return String(b.timestamp).localeCompare(String(a.timestamp));
     });
 });
 
@@ -1898,10 +1904,13 @@ async function handleCreateChild() {
 
 async function handleCreateTransaction() {
   if (!txForm.value.amount || !selectedChildId.value) return;
+  console.log("Initiating transaction creation flow for child ID:", selectedChildId.value);
   
   const senderChild = children.value.find(c => String(c.id) === String(selectedChildId.value));
   
+  // =========================================================================
   // 🌟 DISPATCH CASE A: ATOMIC DUAL TRANSFER DISPATCH ROUTE
+  // =========================================================================
   if (txForm.value.type === 'transfer') {
     if (!txForm.value.recipientChildId) {
       alert("Please select a recipient child profile.");
@@ -1916,14 +1925,13 @@ async function handleCreateTransaction() {
     const descriptionText = txForm.value.what.trim() || 'Pocket Money Share';
     const whereText = txForm.value.where.trim() || '-';
 
-    // 🛡️ Optimistic Local Rows: Explicitly isolating 'where' to prevent payload leakage
     const optimisticSenderRow = {
       id: `tx_send_${timestampId}`,
       childid: String(selectedChildId.value),
       date: transferDate,
       what: `${descriptionText} to ${receiverChild?.name || 'Sibling'}`,
-      where: whereText, // Clean ledger categorization
-      type: 'send',  // Immutability triggering type
+      where: whereText,
+      type: 'send',
       amount: transferAmount,
       recordedby: currentUser.value || 'System',
       timestamp: new Date().toISOString(),
@@ -1936,8 +1944,8 @@ async function handleCreateTransaction() {
       childid: String(txForm.value.recipientChildId),
       date: transferDate,
       what: `${descriptionText} from ${senderChild?.name || 'Sibling'}`,
-      where: whereText, // Clean ledger categorization
-      type: 'receive',  // Immutability triggering type
+      where: whereText,
+      type: 'receive',
       amount: transferAmount,
       recordedby: currentUser.value || 'System',
       timestamp: new Date().toISOString(),
@@ -1945,24 +1953,18 @@ async function handleCreateTransaction() {
       isPendingSync: !isOnline.value
     };
 
-    // Keep old list for failure safety rollbacks
     const historyRollback = [...transactions.value];
-
-    // Optimistically push both transactions into view immediately
     transactions.value.unshift(optimisticSenderRow, optimisticReceiverRow);
     
-    // Clear forms completely
     txForm.value = { date: transferDate, what: '', where: '', type: 'withdrawal', amount: null, recipientChildId: '' };
-    saveDataCacheToDisk(); // Update local storage index cache
+    saveDataCacheToDisk();
 
-    // Handle offline backup queuing
     if (!isOnline.value) {
       pendingQueue.value.push(optimisticSenderRow, optimisticReceiverRow);
       localStorage.setItem("vault_pending_outbox", JSON.stringify(pendingQueue.value));
       return;
     }
 
-    // Network request payload (Matching updated Google Script expectations)
     const networkTransferPayload = {
       action: "addTransfer",
       fingerprint: deviceFingerprint.value,
@@ -1987,24 +1989,20 @@ async function handleCreateTransaction() {
     .then(async (res) => {
       const data = await res.json();
       if (data.status === "success") {
-        // Remove pending indicators upon confirmed database resolution
         const sTx = transactions.value.find(t => t.id === optimisticSenderRow.id);
         const rTx = transactions.value.find(t => t.id === optimisticReceiverRow.id);
         if (sTx) delete sTx.isPendingSync;
         if (rTx) delete rTx.isPendingSync;
         
         saveDataCacheToDisk();
-        fetchSyncDatabase(true); // Background silent data refresh
+        fetchSyncDatabase(true);
       } else { 
         throw new Error(data.message); 
       }
     })
     .catch((err) => {
-      // Fallback fallback if your UI doesn't use the logToScreen utility
       if (typeof logToScreen === 'function') {
         logToScreen(`⚠️ Transfer failed mid-flight, rolling back: ${err.message}`);
-      } else {
-        console.error(`⚠️ Transfer failed mid-flight, rolling back:`, err);
       }
       transactions.value = historyRollback;
       saveDataCacheToDisk();
@@ -2013,7 +2011,83 @@ async function handleCreateTransaction() {
     return;
   }
   
-  // Standard transaction logging logic follows...
+  // =========================================================================
+  // 🌟 DISPATCH CASE B: STANDARD SINGLE TRANSACTION (DEPOSIT / WITHDRAWAL)
+  // =========================================================================
+  const timestampId = Date.now();
+  const txDate = txForm.value.date || new Date().toISOString().split('T')[0];
+  const txAmount = Number(txForm.value.amount);
+  const descriptionText = txForm.value.what.trim() || (txForm.value.type === 'deposit' ? 'Allowance Drop' : 'Cash Out');
+  const whereText = txForm.value.where.trim() || '-';
+
+  // Create local representation object
+  const optimisticTxRow = {
+    id: `tx_${timestampId}`,
+    childid: String(selectedChildId.value),
+    date: txDate,
+    what: descriptionText,
+    where: whereText,
+    type: txForm.value.type, // Expects 'deposit' or 'withdrawal'
+    amount: txAmount,
+    recordedby: currentUser.value || 'System',
+    timestamp: new Date().toISOString(),
+    transfergroup: '', // Blank indicates standalone item
+    isPendingSync: !isOnline.value
+  };
+
+  const historyRollback = [...transactions.value];
+
+  // Instantly inject row locally for high performance feel
+  transactions.value.unshift(optimisticTxRow);
+  
+  // Form reset strategy
+  txForm.value = { date: txDate, what: '', where: '', type: 'withdrawal', amount: null, recipientChildId: '' };
+  saveDataCacheToDisk();
+
+  // If working without a live connection, append to standard outbox synchronization stack
+  if (!isOnline.value) {
+    pendingQueue.value.push(optimisticTxRow);
+    localStorage.setItem("vault_pending_outbox", JSON.stringify(pendingQueue.value));
+    return;
+  }
+
+  // Network request payload mapping back to standard script action endpoints
+  const networkTxPayload = {
+    action: "addTransaction", // Pointing directly to your primary row append script action
+    fingerprint: deviceFingerprint.value,
+    id: optimisticTxRow.id,
+    childId: optimisticTxRow.childid,
+    date: optimisticTxRow.date,
+    what: optimisticTxRow.what,
+    where: optimisticTxRow.where,
+    type: optimisticTxRow.type,
+    amount: optimisticTxRow.amount,
+    recordedBy: optimisticTxRow.recordedby,
+    utcTimestamp: optimisticTxRow.timestamp
+  };
+
+  try {
+    const response = await fetch(SHEET_API_URL, {
+      method: "POST",
+      body: JSON.stringify(networkTxPayload)
+    });
+    
+    const data = await response.json();
+    if (data.status === "success") {
+      const targetLocalTx = transactions.value.find(t => t.id === optimisticTxRow.id);
+      if (targetLocalTx) delete targetLocalTx.isPendingSync;
+      
+      saveDataCacheToDisk();
+      fetchSyncDatabase(true); // Silent clean dataset update
+    } else {
+      throw new Error(data.message);
+    }
+  } catch (err) {
+    console.error("⚠️ Transaction delivery failed, rolling back local cache:", err);
+    transactions.value = historyRollback;
+    saveDataCacheToDisk();
+    alert(`Failed to record transaction online: ${err.message}`);
+  }
 }
 
 function saveDataCacheToDisk() {
@@ -2152,25 +2226,6 @@ function calculateBalance(childId) {
   return initialAmount + netLedger;
 }
 
-
-// Triggered when a parent selects an avatar file
-function handleFileChange(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    rawImageElement = new Image();
-    rawImageElement.onload = () => {
-      isCroppingActive.value = true;
-      nextTick(() => {
-        drawCropCanvas();
-      });
-    };
-    rawImageElement.src = e.target.result;
-  };
-  reader.readAsDataURL(file);
-}
 
 // Renders raw source asset on the editing workspace canvas
 function drawCropCanvas() {
@@ -2523,6 +2578,148 @@ async function handleAvatarDirectUpload({ childId, base64Data }) {
     } else { throw new Error(result.message); }
   } catch (err) { alert(`Avatar mutation failure: ${err.message}`); }
   finally { isLoading.value = false; }
+}
+
+
+// State trackers for the bounding crop selector matrix
+const sourceCanvas = ref(null);
+const outputCanvas = ref(null);
+const workspaceContainer = ref(null);
+const isCroppingActive = ref(false);
+const lens = ref({ x: 0, y: 0, size: 100 });
+const dragMeta = ref({ isActive: false, mode: '', startX: 0, startY: 0, startLensX: 0, startLensY: 0, startLensSize: 0 });
+
+let loadedImageAsset = null;
+let scaleRatio = 1; // Tracks ratio mapping original pixels down to screen workspace canvas
+
+function handleFileChange(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    loadedImageAsset = new Image();
+    loadedImageAsset.onload = () => {
+      isCroppingActive.value = true;
+      nextTick(() => initializeCropperWorkspace());
+    };
+    loadedImageAsset.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function initializeCropperWorkspace() {
+  if (!sourceCanvas.value || !loadedImageAsset) return;
+  const ctx = sourceCanvas.value.getContext('2d');
+  
+  // Rule: Cap display workspace viewport to 100% width parameters safely
+  const maxWidth = Math.min(workspaceContainer.value.clientWidth, 400);
+  scaleRatio = maxWidth / loadedImageAsset.width;
+  
+  const displayWidth = maxWidth;
+  const displayHeight = loadedImageAsset.height * scaleRatio;
+  
+  sourceCanvas.value.width = displayWidth;
+  sourceCanvas.value.height = displayHeight;
+  
+  // Paint background image scaled to the view area
+  ctx.clearRect(0, 0, displayWidth, displayHeight);
+  ctx.drawImage(loadedImageAsset, 0, 0, displayWidth, displayHeight);
+  
+  // Initialize lens selector as a balanced default square in view boundary limits
+  const baseSize = Math.min(displayWidth, displayHeight, 140);
+  lens.value = {
+    x: (displayWidth - baseSize) / 2,
+    y: (displayHeight - baseSize) / 2,
+    size: baseSize
+  };
+}
+
+// Interactive Event Listeners (Mouse & Touch compatible tracking)
+function startDrag(event, mode) {
+  event.preventDefault();
+  dragMeta.value.isActive = true;
+  dragMeta.value.mode = mode;
+  
+  const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+  const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+  
+  dragMeta.value.startX = clientX;
+  dragMeta.value.startY = clientY;
+  dragMeta.value.startLensX = lens.value.x;
+  dragMeta.value.startLensY = lens.value.y;
+  dragMeta.value.startLensSize = lens.value.size;
+}
+
+function onDrag(event) {
+  if (!dragMeta.value.isActive) return;
+  
+  const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+  const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+  
+  const deltaX = clientX - dragMeta.value.startX;
+  const deltaY = clientY - dragMeta.value.startY;
+  
+  const canvasW = sourceCanvas.value.width;
+  const canvasH = sourceCanvas.value.height;
+
+  if (dragMeta.value.mode === 'move') {
+    // Standard translation boundary clipping rules
+    let nextX = dragMeta.value.startLensX + deltaX;
+    let nextY = dragMeta.value.startLensY + deltaY;
+    
+    if (nextX < 0) nextX = 0;
+    if (nextY < 0) nextY = 0;
+    if (nextX + lens.value.size > canvasW) nextX = canvasW - lens.value.size;
+    if (nextY + lens.value.size > canvasH) nextY = canvasH - lens.value.size;
+    
+    lens.value.x = nextX;
+    lens.value.y = nextY;
+  } else if (dragMeta.value.mode === 'resize') {
+    // Proportional uniform bounding box resizing engine rule
+    const deltaSize = Math.max(deltaX, deltaY);
+    let nextSize = dragMeta.value.startLensSize + deltaSize;
+    
+    if (nextSize < 40) nextSize = 40; // minimum clamp bounds size
+    if (lens.value.x + nextSize > canvasW) nextSize = canvasW - lens.value.x;
+    if (lens.value.y + nextSize > canvasH) nextSize = canvasH - lens.value.y;
+    
+    lens.value.size = nextSize;
+  }
+}
+
+function endDrag() {
+  dragMeta.value.isActive = false;
+}
+
+// Generates true transparent target frames
+function processInteractiveCrop() {
+  if (!outputCanvas.value || !sourceCanvas.value) return;
+  const outCtx = outputCanvas.value.getContext('2d');
+  
+  // Isolate the exact coordinates of our selection lens relative to the original photo sizes
+  const sourceCropX = lens.value.x / scaleRatio;
+  const sourceCropY = lens.value.y / scaleRatio;
+  const sourceCropSize = lens.value.size / scaleRatio;
+  
+  outCtx.clearRect(0, 0, 100, 100);
+  
+  // 🌟 PNG Alpha Circle masking logic sequence
+  outCtx.beginPath();
+  outCtx.arc(50, 50, 50, 0, Math.PI * 2);
+  outCtx.clip(); // Locks down subsequent render updates strictly within this circle path bounds
+  
+  // Draw original picture selection framed down into the masked 100x100 pixel canvas
+  outCtx.drawImage(
+    loadedImageAsset,
+    sourceCropX, sourceCropY, sourceCropSize, sourceCropSize, // Source image bounds
+    0, 0, 100, 100 // Target element boundaries
+  );
+  
+  // Export as transparent clean layout PNG string asset
+  const base64Data = outputCanvas.value.toDataURL('image/png');
+  emit('upload-avatar', { childId: childForm.value.id, base64Data });
+  isCroppingActive.value = false;
 }
 
 </script>

@@ -4,35 +4,63 @@
       <h3 class="editor-modal-title"><span v-if="childForm.id">⚙️ Configure Profile: <em :style="`color:${childForm.accentColor};`">{{ childForm.name }}</em></span>
       <span v-else>➕ Create New Child Profile</span></h3>
       <div class="editor-modal-body" style="max-height: 70vh; overflow-y: auto;">
-        <div class="avatar-workspace-flex">
-            <img 
-            :src="childForm.avatarFileId ? `https://docs.google.com/uc?export=view&id=${childForm.avatarFileId}` : 'https://placehold.co/100x100?text=Face'" 
-            class="avatar-preview-circle" 
-            alt="Active Profile Picture"
-            />
-            
-            <div style="flex: 1;">
-    
-            <div v-if="isCroppingActive" style="margin-top: 10px; display: flex; align-items: center; gap: 12px;">
-                <canvas ref="cropCanvas" class="crop-canvas-box"></canvas>
-                <button type="button" @click="saveCroppedAvatar" class="btn btn-submit-tx" style="padding: 6px 12px; font-size: 11px; background: #10b981;">✂️ Crop & Save</button>
+        <div class="avatar-workspace-container">
+            <div class="avatar-current-row">
+                <img 
+  :src="childForm.avatarFileId ? `https://drive.google.com/thumbnail?sz=w500&id=${childForm.avatarFileId}` : 'https://placehold.co/100x100?text=Face'"
+  class="avatar-preview-circle" 
+  alt="Active Profile Picture"
+  @error="(e) => { e.target.src = 'https://placehold.co/100x100?text=Error' }"
+/>
+                <div style="flex: 1;">
+                <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">Select Image Source File</label>
+                <input type="file" ref="imageFileInput" accept="image/*" @change="handleFileChange" class="form-input" style="font-size: 12px; padding: 4px;" />
+                </div>
             </div>
+
+            <div v-if="isCroppingActive" class="cropper-studio">
+                <div class="cropper-canvas-wrapper" ref="workspaceContainer" @mousemove="onDrag" @touchmove.passive="onDrag" @mouseup="endDrag" @touchend="endDrag" @mouseleave="endDrag">
+                <canvas ref="sourceCanvas" class="source-render-canvas"></canvas>
+                
+                <div 
+                    class="crop-lens-overlay"
+                    :style="{
+                        left: (lens?.x ?? 0) + 'px',
+                        top: (lens?.y ?? 0) + 'px',
+                        width: (lens?.size ?? 100) + 'px',
+                        height: (lens?.size ?? 100) + 'px'
+                    }"
+                    @mousedown.self="startDrag($event, 'move')"
+                    @touchstart.self="startDrag($event, 'move')"
+                    >
+                    <div 
+                        class="lens-resize-handle"
+                        @mousedown.stop="startDrag($event, 'resize')"
+                        @touchstart.stop="startDrag($event, 'resize')"
+                    ></div>
+                    </div>
+                </div>
+                
+                <div class="cropper-actions-row">
+                <button type="button" @click="isCroppingActive = false" class="btn" style="background:#475569; padding: 4px 10px; font-size:11px;">Cancel</button>
+                <button type="button" @click="processInteractiveCrop" class="btn btn-submit-tx" style="padding: 4px 12px; font-size: 11px; background: #10b981; margin:0;">✂️ Render & Apply Crop</button>
+                </div>
             </div>
-        </div>
-            <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">Update Face Portrait</label>
-            <input type="file" ref="imageFileInput" accept="image/*" @change="handleFileChange" class="form-input" style="font-size: 12px; padding: 4px;" />
             
+            <canvas ref="outputCanvas" width="100" height="100" style="display: none;"></canvas>
+            </div>
+                       
         <div v-if="avatarsList.filter(a => String(a.childid) === String(childForm.id)).length > 0">
             <span style="font-size: 11px; color: #64748b;">Choose from previously uploaded history files:</span>
             <div class="historical-grid-scroller">
-            <img 
+           <img 
                 v-for="av in avatarsList.filter(a => String(a.childid) === String(childForm.id))" 
                 :key="av.id"
-                :src="`https://docs.google.com/uc?export=view&id=${av.drivefileid}`"
+                :src="`https://drive.google.com/thumbnail?sz=w500&id=${av.drivefileid}`"
                 class="history-avatar-thumb"
                 :class="{ 'active': childForm.avatarFileId === av.drivefileid }"
                 @click="childForm.avatarFileId = av.drivefileid"
-            />
+                />
             </div>
         </div>
 
@@ -129,6 +157,7 @@
 <script setup>
 import { ref, watch, nextTick } from 'vue';
 
+// 1. Core Props & Emits Definitions
 const props = defineProps({
   isOpen: Boolean,
   initialChildData: Object,
@@ -138,18 +167,26 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'save', 'delete', 'upload-avatar']);
 
+// 2. Form & Profile State Variables
 const childForm = ref({
   id: '', name: '', aliases: '', status: 'active',
   interestRate: 0.005, allowanceAmount: 0, allowanceInterval: 'weekly',
   allowanceNextDate: '', comment: '', avatarFileId: '', accentColor: '#38bdf8'
 });
 
-const imageFileInput = ref(null);
-const cropCanvas = ref(null);
+// 3. 📸 Cropper Lens Tracking Matrices
+const sourceCanvas = ref(null);
+const outputCanvas = ref(null);
+const workspaceContainer = ref(null);
 const isCroppingActive = ref(false);
-let rawImageElement = null;
 
-// Synchronize profile mapping when component opens or initial child transitions
+const lens = ref({ x: 0, y: 0, size: 100 });
+const dragMeta = ref({ isActive: false, mode: '', startX: 0, startY: 0, startLensX: 0, startLensY: 0, startLensSize: 0 });
+
+let loadedImageAsset = null;
+let scaleRatio = 1;
+
+// 4. Watchers & Lifecycles
 watch(() => props.isOpen, (openState) => {
   if (openState) {
     if (props.initialChildData) {
@@ -168,7 +205,6 @@ watch(() => props.isOpen, (openState) => {
         accentColor: c.accentcolor || c.accentColor || '#38bdf8'
       };
     } else {
-      // Flush form defaults for adding a completely fresh child profile
       childForm.value = {
         id: '', name: '', aliases: '', status: 'active',
         interestRate: 0.005, allowanceAmount: 0, allowanceInterval: 'weekly',
@@ -182,7 +218,6 @@ watch(() => props.isOpen, (openState) => {
   }
 }, { immediate: true });
 
-// Calendar Engine Tracking
 function calculateTargetMilestone(interval) {
   const now = new Date();
   if (interval === 'monthly') {
@@ -204,42 +239,128 @@ watch(() => childForm.value.allowanceInterval, (newInterval) => {
   }
 });
 
-// Canvas Cropping Pipeline
+// 5. Image File Handler Pipeline
 function handleFileChange(event) {
   const file = event.target.files[0];
   if (!file) return;
+
   const reader = new FileReader();
   reader.onload = (e) => {
-    rawImageElement = new Image();
-    rawImageElement.onload = () => {
+    loadedImageAsset = new Image();
+    loadedImageAsset.onload = () => {
       isCroppingActive.value = true;
-      nextTick(() => drawCropCanvas());
+      nextTick(() => initializeCropperWorkspace());
     };
-    rawImageElement.src = e.target.result;
+    loadedImageAsset.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
 
-function drawCropCanvas() {
-  if (!cropCanvas.value) return;
-  const ctx = cropCanvas.value.getContext('2d');
-  cropCanvas.value.width = 100;
-  cropCanvas.value.height = 100;
-  const minDim = Math.min(rawImageElement.width, rawImageElement.height);
-  const sx = (rawImageElement.width - minDim) / 2;
-  const sy = (rawImageElement.height - minDim) / 2;
-  ctx.clearRect(0, 0, 100, 100);
-  ctx.drawImage(rawImageElement, sx, sy, minDim, minDim, 0, 0, 100, 100);
+function initializeCropperWorkspace() {
+  if (!sourceCanvas.value || !loadedImageAsset) return;
+  const ctx = sourceCanvas.value.getContext('2d');
+  
+  const maxWidth = Math.min(workspaceContainer.value.clientWidth, 400);
+  scaleRatio = maxWidth / loadedImageAsset.width;
+  
+  const displayWidth = maxWidth;
+  const displayHeight = loadedImageAsset.height * scaleRatio;
+  
+  sourceCanvas.value.width = displayWidth;
+  sourceCanvas.value.height = displayHeight;
+  
+  ctx.clearRect(0, 0, displayWidth, displayHeight);
+  ctx.drawImage(loadedImageAsset, 0, 0, displayWidth, displayHeight);
+  
+  const baseSize = Math.min(displayWidth, displayHeight, 140);
+  lens.value = {
+    x: (displayWidth - baseSize) / 2,
+    y: (displayHeight - baseSize) / 2,
+    size: baseSize
+  };
 }
 
-function saveCroppedAvatar() {
-  if (!cropCanvas.value || !childForm.value.id) return;
-  const base64Data = cropCanvas.value.toDataURL('image/jpeg', 0.85);
+// 🌟 6. THE CORE DRAG & SCALE EVENT LISTENERS
+function startDrag(event, mode) {
+  event.preventDefault();
+  dragMeta.value.isActive = true;
+  dragMeta.value.mode = mode;
+  
+  const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+  const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+  
+  dragMeta.value.startX = clientX;
+  dragMeta.value.startY = clientY;
+  dragMeta.value.startLensX = lens.value.x;
+  dragMeta.value.startLensY = lens.value.y;
+  dragMeta.value.startLensSize = lens.value.size;
+}
+
+function onDrag(event) {
+  if (!dragMeta.value.isActive) return;
+  
+  const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+  const clientY = event.touches ? event.touches[0].clientY : event.clientY;
+  
+  const deltaX = clientX - dragMeta.value.startX;
+  const deltaY = clientY - dragMeta.value.startY;
+  
+  const canvasW = sourceCanvas.value.width;
+  const canvasH = sourceCanvas.value.height;
+
+  if (dragMeta.value.mode === 'move') {
+    let nextX = dragMeta.value.startLensX + deltaX;
+    let nextY = dragMeta.value.startLensY + deltaY;
+    
+    if (nextX < 0) nextX = 0;
+    if (nextY < 0) nextY = 0;
+    if (nextX + lens.value.size > canvasW) nextX = canvasW - lens.value.size;
+    if (nextY + lens.value.size > canvasH) nextY = canvasH - lens.value.size;
+    
+    lens.value.x = nextX;
+    lens.value.y = nextY;
+  } else if (dragMeta.value.mode === 'resize') {
+    const deltaSize = Math.max(deltaX, deltaY);
+    let nextSize = dragMeta.value.startLensSize + deltaSize;
+    
+    if (nextSize < 40) nextSize = 40;
+    if (lens.value.x + nextSize > canvasW) nextSize = canvasW - lens.value.x;
+    if (lens.value.y + nextSize > canvasH) nextSize = canvasH - lens.value.y;
+    
+    lens.value.size = nextSize;
+  }
+}
+
+function endDrag() {
+  dragMeta.value.isActive = false;
+}
+
+function processInteractiveCrop() {
+  if (!outputCanvas.value || !sourceCanvas.value) return;
+  const outCtx = outputCanvas.value.getContext('2d');
+  
+  const sourceCropX = lens.value.x / scaleRatio;
+  const sourceCropY = lens.value.y / scaleRatio;
+  const sourceCropSize = lens.value.size / scaleRatio;
+  
+  outCtx.clearRect(0, 0, 100, 100);
+  
+  outCtx.beginPath();
+  outCtx.arc(50, 50, 50, 0, Math.PI * 2);
+  outCtx.clip();
+  
+  outCtx.drawImage(
+    loadedImageAsset,
+    sourceCropX, sourceCropY, sourceCropSize, sourceCropSize,
+    0, 0, 100, 100
+  );
+  
+  const base64Data = outputCanvas.value.toDataURL('image/png');
   emit('upload-avatar', { childId: childForm.value.id, base64Data });
   isCroppingActive.value = false;
 }
 
-// Global programmatic action relays out to parent view context wrapper
+// 7. Global Emits Relays
 function emitSave() {
   if (!childForm.value.name.trim()) return alert("Please enter a profile name.");
   emit('save', { ...childForm.value });
@@ -247,7 +368,7 @@ function emitSave() {
 
 function emitDelete() {
   if (props.hasTransactions) {
-    alert("🔒 This account cannot be deleted because it has ledger transactions. You can deactivate it instead using the status dropdown.");
+    alert("🔒 This account cannot be deleted because it has ledger transactions.");
     return;
   }
   if (confirm(`Are you absolutely sure you want to permanently delete "${childForm.value.name}"?`)) {
@@ -255,6 +376,5 @@ function emitDelete() {
   }
 }
 
-// Expose internal form modifications back to parent updates
 defineExpose({ childForm });
 </script>
