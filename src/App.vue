@@ -35,6 +35,7 @@
       :isOnline="isOnline"
       @navigate="(screen) => currentScreen = screen"
       @refresh="fetchSyncDatabase"
+      @request-add-child="openProfileEditorForNewChild"
       @toggle-debug="isDebugEnabled = !isDebugEnabled"
       @about="isAboutOpen = true"
       @toggle-help="isSpeechHelpVisible = !isSpeechHelpVisible"
@@ -167,7 +168,8 @@
                   <img :src="(child.name == 'Eve') ? 'eve250.png' : ((child.name == 'Jason') ? 'jason250.png' : 'default.png')" class="child-avatar" width="60" height="60" style="flex-basis:1;margin-right:10px;" />
                   <div class="child-row-info" style="flex-basis: 100%;  text-align: left;">                    
                     <h3 :style="`color:${child.accentcolor};`">{{ child.name }} </h3>
-                    <span class="allowance-label" style="text-align:left;"><span style="font-size: 12px;" class="allowance-label-text">Allowance:</span> {{ formatCurrency(child.weeklyallowance) }}/wk</span>
+                    <span class="allowance-label" style="text-align:left;"><span style="font-size: 12px;" class="allowance-label-text">Allowance:</span>
+                      {{ formatCurrency(child.allowanceamount) }}/{{ child?.allowanceinterval === "weekly" ? "wk" : "mo" }}</span>
                     <button 
                       type="button" 
                       @click.stop="openProfileEditor(child)" 
@@ -177,19 +179,22 @@
                       ⚙️
                     </button>
                   </div>
-                  <div class="child-row-balance" :class="calculateBalance(child.id) >= 0 ? 'pos-dark-dark' : 'neg-dark-dark'">
-                    {{ formatCurrency(calculateBalance(child.id)) }}
+                  <div class="child-row-balance" :class="calculateBalance(child.id) >= 0 ? 'pos-dark-dark' : 'neg-dark-dark'">          
+                    <span>{{ formatCurrency(calculateBalance(child.id)).split('.')[0] }}</span>
+                    <span style="    font-size: 18px;font-weight: normal;">.{{ formatCurrency(calculateBalance(child.id)).split('.')[1] }}</span>
                   </div>
                 </div>
-                <div class="child-row-actions" v-if="currentUser === 'Dad'">
-                  <button 
-                    v-if="isChildDeletable(child.id)" 
-                    @click="handleDeleteChild(child.id)" 
-                    class="btn-delete-row" 
-                    title="Delete Child Account">Delete</button>
-                </div>
-              </div>
+               </div>
             </div>
+            <button 
+  type="button" id="add-child-btn"
+  @click="openProfileEditorForNewChild" 
+  class="btn btn-submit-tx"
+  style=" background: rgb(14, 18, 71);
+  margin: 20px;"
+>
+  ➕ Add New Child Account
+</button>
           </div>
            <div v-if="isOnline" class="voice-modal-card" @click.stop>
   
@@ -603,139 +608,20 @@
 
   <AboutDialog :is-open="isAboutOpen" :app-version="appVersion" @close="isAboutOpen = false" />
 
-  <div v-if="isChildEditorOpen" class="editor-modal-overlay">
-  <div class="editor-modal-card">
-    <h3 class="editor-modal-title">⚙️ Configure Profile: <em :style="`color:${childForm.accentColor};`">{{ childForm.name }}</em></h3>
-    <div class="editor-modal-body" style="max-height: 70vh; overflow-y: auto;">
-    <div class="avatar-workspace-flex">
-      <img 
-        :src="childForm.avatarFileId ? `https://docs.google.com/uc?export=view&id=${childForm.avatarFileId}` : 'https://placehold.co/100x100?text=Face'" 
-        class="avatar-preview-circle" 
-        alt="Active Profile Picture"
-      />
-      
-      <div style="flex: 1;">
-       
-        
-        <div v-if="isCroppingActive" style="margin-top: 10px; display: flex; align-items: center; gap: 12px;">
-          <canvas ref="cropCanvas" class="crop-canvas-box"></canvas>
-          <button type="button" @click="saveCroppedAvatar" class="btn btn-submit-tx" style="padding: 6px 12px; font-size: 11px; background: #10b981;">✂️ Crop & Save</button>
-        </div>
-      </div>
-      
-    </div>
-    <div>
- <label style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">Update Face Portrait</label>
-        <input type="file" ref="imageFileInput" accept="image/*" @change="handleFileChange" class="form-input" style="font-size: 12px; padding: 4px;" />
-    </div>
-
-    <div v-if="avatars.filter(a => String(a.childid) === String(childForm.id)).length > 0">
-      <span style="font-size: 11px; color: #64748b;">Choose from previously uploaded history files:</span>
-      <div class="historical-grid-scroller">
-        <img 
-          v-for="av in avatars.filter(a => String(a.childid) === String(childForm.id))" 
-          :key="av.id"
-          :src="`https://docs.google.com/uc?export=view&id=${av.drivefileid}`"
-          class="history-avatar-thumb"
-          :class="{ 'active': childForm.avatarFileId === av.drivefileid }"
-          @click="childForm.avatarFileId = av.drivefileid"
-        />
-      </div>
-    </div>
-
-    <div class="form-group" style="margin-top: 15px;">
-      <label>Display Name</label>
-      <input type="text" v-model="childForm.name" class="form-input" placeholder="Display name string" />
-    </div>
-
-    <div class="form-group" style="margin-top: 15px;">
-  <label style="display: flex; justify-content: space-between; align-items: center;">
-    <span>🎨 Identity Accent Color</span>
-    <input type="color" v-model="childForm.accentColor" style="border:none; background:transparent; cursor:pointer; width:36px; height:24px;" />
-  </label>
   
-  <span style="font-size: 11px; color: #64748b; display: block; margin-bottom: 8px;">
-    Contrast Check Preview (Simulated Background Layout Themes):
-  </span>
-  
-  <div class="color-preview-matrix">
-    <div class="preview-tile tile-dark-blue">
-      <span style=" font-size: 1.5rem;" :style="{ color: childForm.accentColor }">{{ childForm.name || 'Child Name' }}</span>
-      <small>#182848</small>
-    </div>
-    <div class="preview-tile tile-dark-green">
-      <span style=" font-size: 1.5rem;" :style="{ color: childForm.accentColor }">{{ childForm.name || 'Child Name' }}</span>
-      <small>#143b0e</small>
-    </div>
-    <div class="preview-tile tile-dark-red">
-      <span style=" font-size: 1.5rem;" :style="{ color: childForm.accentColor }">{{ childForm.name || 'Child Name' }}</span>
-      <small>#4a0108</small>
-    </div>
-  </div>
-</div>
-
-    <div class="form-group">
-      <label>🤖 Voice AI Variations / Aliases (Comma separated)</label>
-      <input type="text" v-model="childForm.aliases" class="form-input" placeholder="e.g. Evie, EV, daughter, princess" />
-    </div>
-
-  
-  <div class="form-group">
-    <label>Allowance Amount ($)</label>
-    <input type="number" step="0.25" v-model.number="childForm.allowanceAmount" class="form-input" />
-  </div>
-
-  <div class="form-group">
-    <label>Payment Interval</label>
-    <select v-model="childForm.allowanceInterval" class="form-input">
-      <option value="weekly">Weekly (Every Monday)</option>
-      <option value="monthly">Monthly (1st of Month)</option>
-    </select>
-  </div>
 
 
 
-  <div class="form-group">
-    <label>📅 Next Scheduled Payment</label>
-    <input 
-      type="text" 
-      v-model="childForm.allowanceNextDate" 
-      class="form-input" 
-      style="background: #0f172a; color: #38bdf8; font-weight: bold;" 
-      readonly 
-    />
-  </div>
-  <div class="form-group">
-    <label>📈 Growth Interest Rate</label>
-    <select v-model.number="childForm.interestRate" class="form-input">
-      <option :value="0.00">0% No Incentive</option>
-      <option :value="0.005">0.5% Regular Standard</option>
-      <option :value="0.01">1.0% High Savings Rate</option>
-    </select>
-  </div>
-
-
-    <div class="form-group">
-      <label>Internal Ledger Comments / Notes</label>
-      <textarea v-model="childForm.comment" class="form-input" rows="2" placeholder="Biographical tracking details..."></textarea>
-    </div>
-
-    <div class="form-group">
-      <label>Account Status Mode</label>
-      <select v-model="childForm.status" class="form-input">
-        <option value="active">Active Operational Status</option>
-        <option value="deactivated">🛑 Deactivated (Locks from future transaction targets)</option>
-      </select>
-    </div>
-
- 
-    </div>
-       <div style="display: flex; gap: 12px; margin-top: 24px; justify-content: flex-end;">
-      <button type="button" @click="isChildEditorOpen = false" class="btn" style="background: #475569;">Cancel</button>
-      <button type="button" @click="handleUpdateChildProfile" class="btn btn-submit-tx" style="margin: 0;">💾 Save Configurations</button>
-    </div>  
-  </div>
-</div>
+<ChildProfileModal
+  :is-open="isChildEditorOpen"
+  :initial-child-data="selectedEditChild"
+  :avatars-list="avatars"
+  :has-transactions="checkChildHasTransactions(selectedEditChild?.id)"
+  @close="isChildEditorOpen = false"
+  @save="handleSaveChildProfile"
+  @delete="handleDeleteChildProfileFromServer"
+  @upload-avatar="handleAvatarDirectUpload"
+/>
 </template>
 
 <script setup>
@@ -745,6 +631,7 @@ import AddChildSettings from '@/components/AddChildSettings.vue';
 import AddUserSettings from '@/components/AddUserSettings.vue';
 import AboutDialog from '@/components/AboutDialog.vue';
 import BackupSettings from '@/components/BackupSettings.vue';
+import ChildProfileModal from './components/ChildProfileModal.vue';
 import { 
   formatCurrency, 
   formatDate, 
@@ -754,7 +641,7 @@ import {
   getRawImageUrl
 } from './utils/helpers';
 import ActionMenu from '@/components/ActionMenu.vue';
-const appVersion = ref('0.36');
+const appVersion = ref('0.37');
 // Assure you have matching flags linked to control toggles:
 const isDebugEnabled = ref(false); // Controls local screen log views
 const debugMode = ref(false);
@@ -1601,6 +1488,7 @@ async function parseStructuralTranscriptWithAI(text) {
   // Map known children dynamically so the model matches explicit internal IDs instantly
   const childMappingContext = children.value.map(c => `name: "${c.name}", id: "${c.id}"`).join(' | ');
 
+  // TODO: add the aliases into the mapping context as well to improve recognition of nicknames or misheard names (e.g. "Evie" vs "Eve")
   const strictPrompt = `
     You are a precise data parsing microservice for a family pocket money app.
     The user is dictating a transaction following this structural syntax:
@@ -2349,55 +2237,48 @@ async function saveCroppedAvatar() {
 
 function openProfileEditor(child) {
   selectedEditChild.value = child;
-  
-  // Map relational backend spreadsheet column fallback trackers explicitly down to configuration form variables
-  childForm.value = {
-    id: child.id || '',
-    name: child.name || '',
-    aliases: child.aliases || '',
-    status: child.status || 'active',
-    interestRate: Number(child.interestrate || child.interestRate || 0.005),
-    allowanceAmount: Number(child.allowanceamount || child.weeklyAllowance || 0),
-    allowanceInterval: child.allowanceinterval || 'weekly',
-    allowanceNextDate: child.allowancenextdate || '',
-    comment: child.comment || '',
-    avatarFileId: child.avatarfileid || '',
-    accentColor: child.accentcolor || child.accentColor || '#38bdf8',
-  };
-  
   isChildEditorOpen.value = true;
 }
 
 async function handleUpdateChildProfile() {
-  if (!childForm.value.name.trim()) return;
+  if (!childForm.value.name.trim()) {
+    alert("Please enter a profile name.");
+    return;
+  }
 
   isLoading.value = true;
   const originalChildrenList = [...children.value];
+  const isEditingExisting = !!childForm.value.id;
+
+  // 🆔 Set or assign target tracking keys
+  const targetId = isEditingExisting ? childForm.value.id : `child_${Date.now()}`;
   
-  // Optimistically calculate local view updates inside active layout memory array trackers instantly
-  children.value = children.value.map(c => {
-    if (String(c.id) === String(childForm.value.id)) {
-      return {
-        ...c,
-        name: childForm.value.name.trim(),
-        aliases: childForm.value.aliases,
-        status: childForm.value.status,
-        interestrate: childForm.value.interestRate,
-        allowanceamount: childForm.value.allowanceAmount,
-        allowanceinterval: childForm.value.allowanceInterval,
-        allowancenextdate: childForm.value.allowanceNextDate,
-        comment: childForm.value.comment,
-        avatarfileid: childForm.value.avatarFileId,
-        accentcolor: childForm.value.accentColor,
-      };
-    }
-    return c;
-  });
+  const optimizedChildObject = {
+    id: targetId,
+    name: childForm.value.name.trim(),
+    aliases: childForm.value.aliases,
+    status: childForm.value.status,
+    interestrate: childForm.value.interestRate,
+    allowanceamount: childForm.value.allowanceAmount,
+    allowanceinterval: childForm.value.allowanceInterval,
+    allowancenextdate: childForm.value.allowanceNextDate,
+    comment: childForm.value.comment,
+    avatarfileid: childForm.value.avatarFileId,
+    accentcolor: childForm.value.accentColor,
+    // Keep baseline startamount unchanged if editing, otherwise default to 0 for a new child
+    startamount: isEditingExisting ? (selectedEditChild.value?.startamount || 0) : 0
+  };
+
+  // 🧠 Optimistic Local Screen Rendering Updates
+  if (isEditingExisting) {
+    children.value = children.value.map(c => String(c.id) === String(targetId) ? optimizedChildObject : c);
+  } else {
+    children.value.push(optimizedChildObject);
+  }
 
   saveDataCacheToDisk();
 
   if (!isOnline.value) {
-    // Offline configuration state caching rules
     isChildEditorOpen.value = false;
     isLoading.value = false;
     alert("Profile cached locally! Database will fully synchronize once device returns online.");
@@ -2405,34 +2286,38 @@ async function handleUpdateChildProfile() {
   }
 
   try {
+    // 🛠️ Dynamic action selector payload routing
+    const payload = {
+      action: isEditingExisting ? "updateChildProfile" : "createChildExtended",
+      fingerprint: deviceFingerprint.value,
+      id: targetId,
+      name: optimizedChildObject.name,
+      aliases: optimizedChildObject.aliases,
+      status: optimizedChildObject.status,
+      interestRate: optimizedChildObject.interestrate,
+      allowanceAmount: optimizedChildObject.allowanceamount,
+      allowanceInterval: optimizedChildObject.allowanceinterval,
+      allowanceNextDate: optimizedChildObject.allowancenextdate,
+      avatarFileId: optimizedChildObject.avatarfileid,
+      comment: optimizedChildObject.comment,
+      accentColor: optimizedChildObject.accentcolor,
+      startAmount: optimizedChildObject.startamount // Included for initial signups
+    };
+
     const response = await fetch(SHEET_API_URL, {
       method: "POST",
-      body: JSON.stringify({
-        action: "updateChildProfile",
-        fingerprint: deviceFingerprint.value,
-        id: childForm.value.id,
-        name: childForm.value.name.trim(),
-        aliases: childForm.value.aliases,
-        status: childForm.value.status,
-        interestRate: childForm.value.interestRate,
-        allowanceAmount: childForm.value.allowanceAmount,
-        allowanceInterval: childForm.value.allowanceInterval,
-        allowanceNextDate: childForm.value.allowanceNextDate,
-        avatarFileId: childForm.value.avatarFileId,
-        comment: childForm.value.comment,
-        accentColor: childForm.value.accentColor
-      })
+      body: JSON.stringify(payload)
     });
     
     const data = await response.json();
     if (data.status === "success") {
       isChildEditorOpen.value = false;
-      fetchSyncDatabase(true); // Silently sync downstream datasets background
+      fetchSyncDatabase(true); // Silent background synchronization update
     } else {
       throw new Error(data.message);
     }
   } catch (err) {
-    children.value = originalChildrenList; // Roll back upon network execution faults
+    children.value = originalChildrenList; // Safe rollbacks upon core cloud communication faults
     saveDataCacheToDisk();
     alert(`Failed to save configurations online: ${err.message}`);
   } finally {
@@ -2471,6 +2356,174 @@ watch(() => childForm.value.allowanceInterval, (newInterval) => {
     childForm.value.allowanceNextDate = calculateTargetMilestone(newInterval);
   }
 });
+
+// 🌟 Launcher for creating a completely fresh child account
+function openProfileEditorForNewChild() {
+  selectedEditChild.value = null; 
+  isChildEditorOpen.value = true;
+}
+
+// Utility helper checking transaction boundaries from the parent side
+function checkChildHasTransactions(childId) {
+  if (!childId) return false;
+  return transactions.value.some(tx => String(tx.childid || tx.childId) === String(childId));
+}
+
+async function handleDeleteChildProfile() {
+  if (!childForm.value.id) return;
+
+  // 🔍 Check transaction ledger history
+  const hasHistory = transactions.value.some(tx => String(tx.childid || tx.childId) === String(childForm.value.id));
+  
+  if (hasHistory) {
+    alert("🔒 This account cannot be deleted because it has ledger transactions. You can deactivate it instead using the status dropdown below to hide it from daily use.");
+    return;
+  }
+
+  if (!confirm(`Are you absolutely sure you want to permanently delete the profile for "${childForm.value.name}"? This action cannot be undone.`)) {
+    return;
+  }
+
+  isLoading.value = true;
+  const originalChildrenList = [...children.value];
+  const targetId = childForm.value.id;
+
+  // Optimistically remove from local view instantly
+  children.value = children.value.filter(c => String(c.id) !== String(targetId));
+  saveDataCacheToDisk();
+
+  if (!isOnline.value) {
+    isChildEditorOpen.value = false;
+    isLoading.value = false;
+    alert("Profile deleted locally! It will be removed from the server once you are online.");
+    return;
+  }
+
+  try {
+    const response = await fetch(SHEET_API_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "deleteChildProfile",
+        fingerprint: deviceFingerprint.value,
+        id: targetId
+      })
+    });
+
+    const data = await response.json();
+    if (data.status === "success") {
+      isChildEditorOpen.value = false;
+      fetchSyncDatabase(true); // Silent background refresh
+    } else {
+      throw new Error(data.message);
+    }
+  } catch (err) {
+    children.value = originalChildrenList; // Roll back local array on failure
+    saveDataCacheToDisk();
+    alert(`Failed to delete profile from server: ${err.message}`);
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+async function handleSaveChildProfile(formData) {
+  isLoading.value = true;
+  const originalChildrenList = [...children.value];
+  const isEditingExisting = !!formData.id;
+  const targetId = isEditingExisting ? formData.id : `child_${Date.now()}`;
+  
+  const optimizedChildObject = {
+    id: targetId,
+    name: formData.name.trim(),
+    aliases: formData.aliases,
+    status: formData.status,
+    interestrate: formData.interestRate,
+    allowanceamount: formData.allowanceAmount,
+    allowanceinterval: formData.allowanceInterval,
+    allowancenextdate: formData.allowanceNextDate,
+    comment: formData.comment,
+    avatarfileid: formData.avatarFileId,
+    accentcolor: formData.accentColor,
+    startamount: isEditingExisting ? (selectedEditChild.value?.startamount || 0) : 0
+  };
+
+  // Optimistic local screen updates
+  if (isEditingExisting) {
+    children.value = children.value.map(c => String(c.id) === String(targetId) ? optimizedChildObject : c);
+  } else {
+    children.value.push(optimizedChildObject);
+  }
+  saveDataCacheToDisk();
+
+  try {
+    const payload = {
+      action: isEditingExisting ? "updateChildProfile" : "createChildExtended",
+      fingerprint: deviceFingerprint.value,
+      id: targetId,
+      name: optimizedChildObject.name,
+      aliases: optimizedChildObject.aliases,
+      status: optimizedChildObject.status,
+      interestRate: optimizedChildObject.interestrate,
+      allowanceAmount: optimizedChildObject.allowanceamount,
+      allowanceInterval: optimizedChildObject.allowanceinterval,
+      allowanceNextDate: optimizedChildObject.allowancenextdate,
+      avatarFileId: optimizedChildObject.avatarfileid,
+      comment: optimizedChildObject.comment,
+      accentColor: optimizedChildObject.accentcolor,
+      startAmount: optimizedChildObject.startamount
+    };
+
+    const response = await fetch(SHEET_API_URL, { method: "POST", body: JSON.stringify(payload) });
+    const data = await response.json();
+    if (data.status === "success") {
+      isChildEditorOpen.value = false;
+      fetchSyncDatabase(true);
+    } else { throw new Error(data.message); }
+  } catch (err) {
+    children.value = originalChildrenList;
+    saveDataCacheToDisk();
+    alert(`Error updating profile: ${err.message}`);
+  } finally { isLoading.value = false; }
+}
+
+async function handleDeleteChildProfileFromServer(targetId) {
+  isLoading.value = true;
+  const originalChildrenList = [...children.value];
+  children.value = children.value.filter(c => String(c.id) !== String(targetId));
+  saveDataCacheToDisk();
+
+  try {
+    const response = await fetch(SHEET_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ action: "deleteChildProfile", fingerprint: deviceFingerprint.value, id: targetId })
+    });
+    const data = await response.json();
+    if (data.status === "success") {
+      isChildEditorOpen.value = false;
+      fetchSyncDatabase(true);
+    } else { throw new Error(data.message); }
+  } catch (err) {
+    children.value = originalChildrenList;
+    saveDataCacheToDisk();
+    alert(`Error deleting child profile: ${err.message}`);
+  } finally { isLoading.value = false; }
+}
+
+// Dynamic direct avatar handling route triggered from component
+async function handleAvatarDirectUpload({ childId, base64Data }) {
+  isLoading.value = true;
+  try {
+    const res = await fetch(SHEET_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ action: "uploadAvatarDirect", fingerprint: deviceFingerprint.value, childId, base64Data })
+    });
+    const result = await res.json();
+    if (result.status === "success" && result.fileId) {
+      avatars.value.unshift({ id: `av_opt_${Date.now()}`, childid: childId, drivefileid: result.fileId, uploadedat: new Date().toISOString() });
+      fetchSyncDatabase(true); // Pull fresh associations
+    } else { throw new Error(result.message); }
+  } catch (err) { alert(`Avatar mutation failure: ${err.message}`); }
+  finally { isLoading.value = false; }
+}
 
 </script>
 

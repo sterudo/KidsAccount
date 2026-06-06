@@ -316,9 +316,9 @@ select#global-user {
     padding: 8px;
     border-radius: 6px;
     white-space: nowrap;
-    min-width: 120px;
+    min-width: 100px;
     text-align: center;
-    padding-bottom: 12px;
+    padding-bottom: 8px;
 }
 .child-row-actions {
     padding-right: 0px;
@@ -1580,6 +1580,7 @@ button.Withdraw {
 
 .editor-modal-card label {
     color:silver;
+    margin-top: 8px;
 }
 
 @keyframes slideDownFade {
@@ -1633,6 +1634,10 @@ button.Withdraw {
 /* Ensure mobile stacking rules do not distort header utilities button configurations */
 
 @media (max-width: 600px) {
+
+    #add-child-btn {
+        display :none;
+    }
       .help-tips-grid {
         grid-template-columns: 1fr;
         gap: 12px;
@@ -1689,7 +1694,15 @@ button.Withdraw {
 }
 
 
-@media (max-width: 370px) {
+@media (max-width: 465px) {
+    .preview-tile span {
+        font-size: 1rem  !important;
+    }
+
+      .preview-tile  {
+        padding: 4px !important;
+      }
+
   .h1s {
     font-size: 16px !important;
   }

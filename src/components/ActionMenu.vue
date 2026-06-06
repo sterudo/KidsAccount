@@ -18,7 +18,13 @@
           <span class="menu-item-icon">👥</span> Add / Manage Parents
         </button>
         
-        <button :disabled="!isOnline" type="button" class="menu-item" :class="{ 'isDisabled': !isOnline }" @click="triggerAction('addChildSettings')">
+        <button 
+            :disabled="!isOnline" 
+            type="button" 
+            class="menu-item" 
+            :class="{ 'isDisabled': !isOnline }" 
+         @click="$emit('request-add-child')"
+            >
           <span class="menu-item-icon">👦</span> Add New Child Profile
         </button>
 

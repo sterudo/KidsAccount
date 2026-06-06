@@ -38,6 +38,7 @@
           <div class="meta-item">
             <p class="meta-label">Version History:</p>
             <div class="meta-value"><ul>
+                <li><strong>0.37</strong> - Management module, delete </li>
                 <li><strong>0.36</strong> - Accent color</li>
                 <li><strong>0.35</strong> - Children management.</li>
                 <li><strong>0.34</strong> - Visual improvements mainly Dashboard.</li>

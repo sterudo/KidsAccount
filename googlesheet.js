@@ -309,12 +309,61 @@ function doPost(e) {
       result = { status: "success", message: "Child account recorded successfully." };
     }
     
+// --- ACTIONS LAYER 4B: CREATE NEW CHILD PROFILE WITH EXTENDED VALUES ---
+    else if (action === "createChildExtended") {
+      if (!childrenSheet) throw new Error("Children sheet layout tab is missing.");
+      
+      const headers = childrenSheet.getDataRange().getValues()[0].map(h => String(h).toLowerCase().trim());
+      let newRow = new Array(headers.length).fill("");
+      
+      headers.forEach((header, idx) => {
+        if (header === "id") newRow[idx] = payload.id;
+        else if (header === "name") newRow[idx] = payload.name;
+        else if (header === "startamount") newRow[idx] = Number(payload.startAmount) || 0;
+        else if (header === "status") newRow[idx] = payload.status || "active";
+        else if (header === "aliases") newRow[idx] = payload.aliases || "";
+        else if (header === "interestrate") newRow[idx] = Number(payload.interestRate) || 0;
+        else if (header === "allowanceamount") newRow[idx] = Number(payload.allowanceAmount) || 0;
+        else if (header === "allowanceinterval") newRow[idx] = payload.allowanceInterval || "weekly";
+        else if (header === "allowancenextdate") newRow[idx] = payload.allowanceNextDate || "";
+        else if (header === "avatarfileid") newRow[idx] = payload.avatarFileId || "";
+        else if (header === "comment") newRow[idx] = payload.comment || "";
+        else if (header === "accentcolor") newRow[idx] = payload.accentColor || "#38bdf8";
+      });
+      
+      childrenSheet.appendRow(newRow);
+      result = { status: "success", message: "Extended child row structural account added." };
+    }
+
     else if (action === "uploadAvatarDirect") {
       const uploadRes = uploadChildAvatar(payload.childId, payload.base64Data);
       if (uploadRes.success) {
         result = { status: "success", fileId: uploadRes.fileId };
       } else {
         throw new Error(uploadRes.error);
+      }
+    }
+
+    // --- ACTIONS LAYER 4C: ELIMINATE EMPTY CHILD PROFILE ROW ---
+    else if (action === "deleteChildProfile") {
+      if (!childrenSheet) throw new Error("Children data sheet layout tab is missing.");
+      
+      const data = childrenSheet.getDataRange().getValues();
+      const idIdx = data[0].map(h => String(h).toLowerCase().trim()).indexOf("id");
+      
+      let targetRowIndex = -1;
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][idIdx]).trim() === String(payload.id).trim()) {
+          targetRowIndex = i + 1; // 1-based indexing for sheets range rows
+          break;
+        }
+      }
+      
+      if (targetRowIndex !== -1) {
+        childrenSheet.deleteRow(targetRowIndex);
+        result = { status: "success", message: "Child profile permanently removed from directory." };
+      } else {
+        throw new Error("Specified child profile ID could not be matched for deletion.");
       }
     }
     
