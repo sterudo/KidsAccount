@@ -38,6 +38,7 @@
           <div class="meta-item">
             <p class="meta-label">Version History:</p>
             <div class="meta-value"><ul>
+                <li><strong>0.39</strong> - bug fixes, caching </li>
                 <li><strong>0.38</strong> - Image handling </li>
                 <li><strong>0.37</strong> - Management module, delete </li>
                 <li><strong>0.36</strong> - Accent color</li>

@@ -647,7 +647,7 @@ import {
   getRawImageUrl
 } from './utils/helpers';
 import ActionMenu from '@/components/ActionMenu.vue';
-const appVersion = ref('0.38');
+const appVersion = ref('0.41::');
 // Assure you have matching flags linked to control toggles:
 const isDebugEnabled = ref(false); // Controls local screen log views
 const debugMode = ref(false);
@@ -678,10 +678,10 @@ const txForm = ref({
   date: new Date().toISOString().split('T')[0],
   what: '',
   where: '',
-  type: 'withdrawal', // 'withdrawal', 'deposit', or 'transfer'
+  type: 'withdrawal',
   amount: null,
-  recipientChildId: '', // Track targeted sibling
-  receiptImageBase64 : "", // For storing captured receipt image data temporarily''
+  recipientChildId: '',
+  receiptImageBase64: '' // Cleaner match
 });
 
 
@@ -1063,13 +1063,12 @@ function triggerCameraCapture() {
   }
 }
 
-
 function handleCameraCapture(event) {
   const file = event.target.files[0];
   if (!file) return;
 
   isLoading.value = true;
-  aiWhatSuggestions.value = [];
+  aiWhatSuggestions.value = []; // Reset old suggestions instantly
   logToScreen(`Camera captured: ${file.name}. Commencing 400px downscaling pass...`);
 
   const reader = new FileReader();
@@ -1106,11 +1105,23 @@ function handleCameraCapture(event) {
 
       logToScreen(`Resize sequence optimized: Final resolution is ${width}x${height}px.`);
 
-      // 1. Kick off your existing Gemini parsing logic
-      await parseImageWithGeminiVision(pureBase64Data, "image/jpeg");
-
-      // 2. 🌟 NEW: Save this base64 image data into your txForm state so it uploads when saving the transaction!
+      // 🌟 STEP 1: Save the base64 image data into state immediately!
+      // This guarantees the image data is safely recorded even if the AI network drops.
       txForm.value.receiptImageBase64 = pureBase64Data;
+
+      // 🌟 STEP 2: Safe Execution Wrapper for Gemini Vision API Call
+      try {
+        logToScreen("Sending optimized frame to Gemini Vision parser...");
+        await parseImageWithGeminiVision(pureBase64Data, "image/jpeg");
+        logToScreen(`Gemini parsing completed. Found ${aiWhatSuggestions.value.length} recommendations.`);
+      } catch (geminiError) {
+        console.error("⚠️ Gemini receipt analysis failed:", geminiError);
+        logToScreen(`AI Parsing Error: ${geminiError.message}`);
+      } finally {
+        // Turning loading off inside 'finally' ensures the UI updates and 
+        // reveals the suggestions dropdown whether the AI succeeds or fails!
+        isLoading.value = false;
+      }
     };
     img.src = e.target.result;
   };
@@ -1908,6 +1919,9 @@ async function handleCreateTransaction() {
   
   const senderChild = children.value.find(c => String(c.id) === String(selectedChildId.value));
   
+  // Cache the image from the form before doing anything else
+  const attachedReceiptImage = txForm.value.receiptImageBase64 || "";
+  
   // =========================================================================
   // 🌟 DISPATCH CASE A: ATOMIC DUAL TRANSFER DISPATCH ROUTE
   // =========================================================================
@@ -1936,6 +1950,7 @@ async function handleCreateTransaction() {
       recordedby: currentUser.value || 'System',
       timestamp: new Date().toISOString(),
       transfergroup: groupToken,
+      receiptImageBase64: attachedReceiptImage, // Retain offline copy
       isPendingSync: !isOnline.value
     };
 
@@ -1950,13 +1965,14 @@ async function handleCreateTransaction() {
       recordedby: currentUser.value || 'System',
       timestamp: new Date().toISOString(),
       transfergroup: groupToken,
+      receiptImageBase64: attachedReceiptImage, // Retain offline copy
       isPendingSync: !isOnline.value
     };
 
     const historyRollback = [...transactions.value];
     transactions.value.unshift(optimisticSenderRow, optimisticReceiverRow);
     
-    txForm.value = { date: transferDate, what: '', where: '', type: 'withdrawal', amount: null, recipientChildId: '' };
+    txForm.value = { date: transferDate, what: '', where: '', type: 'withdrawal', amount: null, recipientChildId: '', receiptImageBase64: '' };
     saveDataCacheToDisk();
 
     if (!isOnline.value) {
@@ -2027,11 +2043,12 @@ async function handleCreateTransaction() {
     date: txDate,
     what: descriptionText,
     where: whereText,
-    type: txForm.value.type, // Expects 'deposit' or 'withdrawal'
+    type: txForm.value.type,
     amount: txAmount,
     recordedby: currentUser.value || 'System',
     timestamp: new Date().toISOString(),
-    transfergroup: '', // Blank indicates standalone item
+    transfergroup: '',
+    receiptImageBase64: attachedReceiptImage, // Store in local cache object
     isPendingSync: !isOnline.value
   };
 
@@ -2040,8 +2057,8 @@ async function handleCreateTransaction() {
   // Instantly inject row locally for high performance feel
   transactions.value.unshift(optimisticTxRow);
   
-  // Form reset strategy
-  txForm.value = { date: txDate, what: '', where: '', type: 'withdrawal', amount: null, recipientChildId: '' };
+  // Form reset strategy: clear receipt input safely
+  txForm.value = { date: txDate, what: '', where: '', type: 'withdrawal', amount: null, recipientChildId: '', receiptImageBase64: '' };
   saveDataCacheToDisk();
 
   // If working without a live connection, append to standard outbox synchronization stack
@@ -2053,7 +2070,7 @@ async function handleCreateTransaction() {
 
   // Network request payload mapping back to standard script action endpoints
   const networkTxPayload = {
-    action: "addTransaction", // Pointing directly to your primary row append script action
+    action: "addTransaction",
     fingerprint: deviceFingerprint.value,
     id: optimisticTxRow.id,
     childId: optimisticTxRow.childid,
@@ -2063,7 +2080,10 @@ async function handleCreateTransaction() {
     type: optimisticTxRow.type,
     amount: optimisticTxRow.amount,
     recordedBy: optimisticTxRow.recordedby,
-    utcTimestamp: optimisticTxRow.timestamp
+    utcTimestamp: optimisticTxRow.timestamp,
+    // 🌟 FUTURE PROOFING: Provide both parameter keys so Google Script catches it regardless
+    receiptImageBase64: attachedReceiptImage,
+    receiptBase64: attachedReceiptImage
   };
 
   try {
@@ -2722,6 +2742,103 @@ function processInteractiveCrop() {
   isCroppingActive.value = false;
 }
 
+// 🧠 Local storage image stream cache manager
+const avatarBase64Cache = ref(JSON.parse(localStorage.getItem("vault_avatar_cache") || "{}"));
+
+async function resolveAndCacheAvatar(childId, driveFileId) {
+  if (!driveFileId) return 'https://placehold.co/100x100?text=Face';
+  
+  // Rule 1: If we have a local cache entry, return it immediately for instant rendering!
+  if (avatarBase64Cache.value[childId]) {
+    // Silently fetch and update the cache in the background without blocking the UI
+    lazyUpdateAvatarCacheInBackground(childId, driveFileId);
+    return avatarBase64Cache.value[childId];
+  }
+
+  // Rule 2: If no cache exists, hit the drive network source directly
+  const secureUrl = `https://drive.google.com/thumbnail?sz=w500&id=${driveFileId}`;
+  lazyUpdateAvatarCacheInBackground(childId, driveFileId);
+  return secureUrl;
+}
+
+async function lazyUpdateAvatarCacheInBackground(childId, driveFileId) {
+  if (!isOnline.value) return;
+  try {
+    const targetUrl = `https://drive.google.com/thumbnail?sz=w500&id=${driveFileId}`;
+    const response = await fetch(targetUrl);
+    const blob = await response.blob();
+    
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result;
+      // Commit string stream directly into localized operational memory arrays
+      avatarBase64Cache.value[childId] = base64String;
+      localStorage.setItem("vault_avatar_cache", JSON.stringify(avatarBase64Cache.value));
+    };
+    reader.readAsDataURL(blob);
+  } catch (err) {
+    console.warn(`Silent avatar update bypassed: ${err.message}`);
+  }
+}
+
+// Storage dictionary structure: { "lat_lng_key": { suggestions: [...], lat: X, lng: Y, timestamp: Date } }
+const geoProximityCache = ref(JSON.parse(localStorage.getItem("vault_geo_location_cache") || "[]"));
+
+async function getAISuggestionsWithGeoCache(currentLatitude, currentLongitude) {
+  const coordinateThreshold = 0.0005; // 🌟 Math: Maps to a ~55-meter radius box bound
+
+  // Check if our cache contains coordinates within our threshold box
+  const matchedCacheEntry = geoProximityCache.value.find(entry => {
+    const latDelta = Math.abs(entry.lat - currentLatitude);
+    const lngDelta = Math.abs(entry.lng - currentLongitude);
+    return latDelta <= coordinateThreshold && lngDelta <= coordinateThreshold;
+  });
+
+  if (matchedCacheEntry) {
+    console.log("🎯 Proximity cache match found within 50m! Returning instantly.");
+    
+    // 🚀 Background Sync: Refresh the cache silently from the cloud API to catch changes
+    silentRefreshGeoCache(currentLatitude, currentLongitude);
+    
+    return matchedCacheEntry.suggestions;
+  }
+
+  // If no cache entry matches, perform standard live cloud API fetching pipeline
+  return await fetchLiveLocationSuggestions(currentLatitude, currentLongitude);
+}
+
+async function fetchLiveLocationSuggestions(lat, lng) {
+  try {
+    const response = await fetch(`${SHEET_API_URL}?action=getAISuggestions&lat=${lat}&lng=${lng}`);
+    const data = await response.json();
+    
+    if (data.status === "success" && data.suggestions) {
+      // Push fresh entry down into local memory cache tracks
+      geoProximityCache.value.push({
+        lat: lat,
+        lng: lng,
+        suggestions: data.suggestions,
+        timestamp: Date.now()
+      });
+      
+      // Keep cache lean by keeping only the 20 most recent locations
+      if (geoProximityCache.value.length > 20) geoProximityCache.value.shift();
+      
+      localStorage.setItem("vault_geo_location_cache", JSON.stringify(geoProximityCache.value));
+      return data.suggestions;
+    }
+  } catch (err) {
+    console.error("Live geocoding lookup failed:", err);
+  }
+  return [];
+}
+
+async function silentRefreshGeoCache(lat, lng) {
+  if (!isOnline.value) return;
+  // Fire request quietly to keep suggestions up to date over time
+  const freshSuggestions = await fetchLiveLocationSuggestions(lat, lng);
+  console.log("🔄 Background geo-cache synchronization finalized successfully.");
+}
 </script>
 
 <style scoped>

@@ -113,16 +113,28 @@ function doPost(e) {
     // --- ACTIONS LAYER 1: APPEND STANDARD TRANSACTION ---
     if (action === "addTransaction" || action === "createTransaction") {
       let fileUrl = "";
-      if (payload.receiptImageBase64 && payload.receiptImageBase64.trim().length > 0) {
+      
+      // 🌟 UPGRADED: Fallback check matching both frontend payload variations safely
+      var incomingBase64 = payload.receiptImageBase64 || payload.receiptBase64 || "";
+      
+      if (incomingBase64 && incomingBase64.trim().length > 0) {
         try {
+          // Clean out standard Base64 header signatures if present to avoid file corruption
+          var rawBase64 = incomingBase64.split(",")[1] || incomingBase64;
+          
           const folderName = "KidsApp_Receipts";
           let folders = DriveApp.getFoldersByName(folderName);
           let folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
-          const decodedBlob = Utilities.newBlob(Utilities.base64Decode(payload.receiptImageBase64), "image/jpeg", "receipt_" + new Date().getTime() + ".jpg");
+          
+          // Decode data stream and create asset inside target directory
+          const decodedBlob = Utilities.newBlob(Utilities.base64Decode(rawBase64), "image/jpeg", "receipt_" + new Date().getTime() + ".jpg");
           const file = folder.createFile(decodedBlob);
+          
           file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
           fileUrl = file.getUrl(); 
-        } catch (driveErr) { fileUrl = "Upload Error: " + driveErr.toString(); }
+        } catch (driveErr) { 
+          fileUrl = "Upload Error: " + driveErr.toString(); 
+        }
       }
 
       const txHeaders = txSheet.getDataRange().getValues()[0].map(h => String(h).toLowerCase().trim());
@@ -144,7 +156,7 @@ function doPost(e) {
       });
 
       txSheet.appendRow(newRow);
-      result = { status: "success", message: "Transaction written to spreadsheet." };
+      result = { status: "success", message: "Transaction written to spreadsheet.", fileUrl: fileUrl };
     }
     
     // --- ACTIONS LAYER: ATOMIC DUAL TRANSFER WRITER ---
@@ -550,7 +562,12 @@ function uploadChildAvatar(childId, base64Data) {
   var childrenSheet = ss.getSheetByName("children");
   
   var rawBase64 = base64Data.split(",")[1] || base64Data;
-  var blob = Utilities.newBlob(Utilities.base64Decode(rawBase64), "image/jpeg", "avatar_" + childId + "_" + Date.now() + ".jpg");
+
+  var isPng = base64Data.indexOf("image/png") !== -1;
+  var mimeType = isPng ? "image/png" : "image/jpeg";
+  var ext = isPng ? ".png" : ".jpg";
+
+  var blob = Utilities.newBlob(Utilities.base64Decode(rawBase64), mimeType, "avatar_" + childId + "_" + Date.now() + ext);
   
   var folders = DriveApp.getFoldersByName("KidsAccount_Avatars");
   var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder("KidsAccount_Avatars");
