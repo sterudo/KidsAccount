@@ -12,11 +12,18 @@ self.addEventListener('install', (event) => {
   );
 });
 
+// Inside your Service Worker event listener intercept loop:
 self.addEventListener('fetch', (event) => {
-  // Let network requests go through normally so our Google Sheets API stays real-time
-  event.respondWith(
-    fetch(event.request).catch(() => {
-      return caches.match(event.request);
-    })
-  );
+  // Only intercept page navigation requests if we want to serve a hard offline page.
+  // 🌟 FIX: For a data-cached PWA app shell, we should always return the cached index.html shell instead!
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        return caches.match('/index.html'); // Serves the Vue engine layout shell offline!
+      })
+    );
+    return;
+  }
+
+  // Standard static asset/image caching strategies...
 });
