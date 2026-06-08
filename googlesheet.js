@@ -23,11 +23,12 @@ function doGet(e) {
   const txSheet = sheet.getSheetByName("transactions");
   const configSheet = sheet.getSheetByName("config");
   const userSheet = sheet.getSheetByName("users");
-  const avatarSheet = sheet.getSheetByName("avatars"); // Added reference
+  const avatarSheet = sheet.getSheetByName("avatars");
 
   function parseSheetRecords(targetSheet) {
     if (!targetSheet) return [];
-    const data = targetSheet.getDataRange().getValues();
+    const range = targetSheet.getDataRange();
+    const data = range.getValues();
     if (data.length <= 1) return [];
     
     const headers = data[0].map(h => String(h).toLowerCase().trim());
@@ -49,14 +50,14 @@ function doGet(e) {
   
   const children = parseSheetRecords(childrenSheet);
   const transactions = parseSheetRecords(txSheet);
-  const avatarsHistory = parseSheetRecords(avatarSheet); // Parse historical avatar images
+  const avatarsHistory = parseSheetRecords(avatarSheet);
   
   let usersList = ["Dad", "Mum"];
   if (userSheet) {
     const userValues = userSheet.getDataRange().getValues();
     usersList = userValues.slice(1)
-                          .map(row => String(row[0]).trim())
-                          .filter(name => name.length > 0);
+                      .map(row => String(row[0]).trim())
+                      .filter(name => name.length > 0);
   }
 
   let systemConfig = {};
@@ -71,19 +72,21 @@ function doGet(e) {
   
   const action = e && e.parameter ? e.parameter.action : "";
   
-  if (action === "getInitialData" || !action) {
+  // FIXED: Logic handles 'getDatabase' and 'getInitialData' actions
+  if (action === "getDatabase" || action === "getInitialData" || !action) {
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
       children: children,
       transactions: transactions,
       users: usersList,
       config: systemConfig,
-      avatars: avatarsHistory // 🌟 Sent down to allow re-selection from cache later
+      avatars: avatarsHistory
     })).setMimeType(ContentService.MimeType.JSON);
   }
   
   return ContentService.createTextOutput(JSON.stringify({ 
-    status: "online", message: "Engine active." 
+    status: "online", 
+    message: "Engine active, but action not recognized: " + action 
   })).setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -237,6 +240,23 @@ function doPost(e) {
       });
       
       result = { status: "success", message: "Transaction entry updated accurately." };
+    }
+
+    // Add this to your Google Apps Script doPost(e)
+    else if (action === "updateAvatarAssociation") {
+      const avatarSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("avatars");
+      const data = avatarSheet.getDataRange().getValues();
+      
+      let found = false;
+      for (let i = 1; i < data.length; i++) {
+        // Column 2 is childid
+        if (String(data[i][1]).trim() === String(payload.oldChildId).trim()) {
+          avatarSheet.getRange(i + 1, 2).setValue(payload.newChildId);
+          found = true;
+          break;
+        }
+      }
+      result = { status: found ? "success" : "error", message: found ? "Updated" : "Association not found" }
     }
     
     // --- ACTIONS LAYER 3: DELETE TRANSACTION (BLOCKED IF TRANSFER) ---

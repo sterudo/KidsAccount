@@ -189,10 +189,10 @@ select#global-user {
 }
 
 .childsName {
-    text-align: left;
-    margin-right: 32px;
-    color: var(--primary);
-    font-size: 24px;
+   text-align: left;
+  margin-left: 65px;
+  color: var(--primary);
+  font-size: 24px;
 }
 
 #app {
@@ -258,11 +258,11 @@ select#global-user {
 }
 
 .balancelabel {
-    font-size: 12px;
-    font-weight: normal;
-    position: relative;
-    top: 8px;
-    left: 3px;
+        font-size: 10px;
+  font-weight: normal;
+  position: absolute;
+  top: -5px;
+  right: 18px;
 }
 /*
 
@@ -294,7 +294,7 @@ select#global-user {
     flex: 1;
     justify-content: space-between;
     align-items: center;
-    padding: 20px;
+    padding: 12px;
     cursor: pointer;
 }
 .child-row-click-area:hover {
@@ -306,19 +306,16 @@ select#global-user {
     font-size: 1.5rem;
     color: rgb(223, 227, 236);
 }
-.allowance-label {
-    font-size: 0.9rem;
-    color: var(--text-muted);
-}
+
 .child-row-balance {
     font-size: 2rem;
     font-weight: 900;
     padding: 8px;
     border-radius: 6px;
     white-space: nowrap;
-    min-width: 100px;
+    min-width: 110px;
     text-align: center;
-    padding-bottom: 8px;
+    box-sizing: border-box;
 }
 .child-row-actions {
     padding-right: 0px;
@@ -334,6 +331,7 @@ select#global-user {
     font-size: 0.95rem;
     margin: 2px;
     white-space: nowrap;
+    min-width:80px;
 }
 .btn-primary {
     background: var(--primary);
@@ -411,6 +409,7 @@ select#global-user {
     flex-direction: column;
     flex: 1;
     min-width: 140px;
+    margin-top: 8px;
 }
 .log-submit-btn {
     padding: 12px 24px;
@@ -724,10 +723,12 @@ button.Withdraw {
     background: var(--danger-dark) !important;
 }
 
+/*
 .form-card input,
 .form-card select {
     box-shadow: 1px 1px 1px gray;
 }
+    */
 
 .balance-badge {
         padding-top: 12px !important;
@@ -743,6 +744,13 @@ button.Withdraw {
 
     section.screen {
     margin-top: 2px;
+}
+
+input:active,input:focus, input:focus-visible,input:focus-within,
+textarea:active,textarea:focus, textarea:focus-visible,textarea:focus-within,
+select:active,select:focus, select:focus-visible,select:focus-within {
+  outline: 1px solid silver;
+  background: #114;
 }
 /* --- TWO-ROW-PER-TRANSACTION MOBILE LAYOUT RULES --- */
 @media (max-width: 600px) {
@@ -791,8 +799,7 @@ button.Withdraw {
         align-items: stretch;
         gap: 0px 8px;
         border-bottom: none;
-        margin-bottom: 0px;
-        top: 40px;
+        margin-bottom: 0px;        
     }
     .nav-and-back-group {
         flex-direction: column;
@@ -963,8 +970,8 @@ button.Withdraw {
 }
 .rowimg {
     position: absolute;
-           top: -6px;
-        left:120px
+    top: -6px;
+    left: 8px;
 }
 
 .voice-card {
@@ -1034,11 +1041,12 @@ button.Withdraw {
     background: #17192d;
     border: 1px solid #20252b;
     width: 100%;
-    max-width: 100%;
+        max-width: 1200px;
     border-radius: 12px;
     padding: 8px;
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
     box-sizing: border-box;
+
 }
 
 .voice-modal-header {
@@ -1103,6 +1111,7 @@ button.Withdraw {
     margin: 0px 0px 20px;
     gap: 16px;
     justify-items: center;
+    max-width:1200px;
 }
 
 .btn-mic-action {
@@ -1579,8 +1588,9 @@ button.Withdraw {
 }
 
 .editor-modal-card label {
-    color:silver;
-    margin-top: 8px;
+  color: #b0c3e7;
+  margin-top: 8px;
+  margin-bottom: 2px;
 }
 
 @keyframes slideDownFade {
@@ -1596,8 +1606,8 @@ button.Withdraw {
 .color-preview-matrix {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 10px;
-  margin-top: 6px;
+  gap: 8px;
+  margin-top: 0px;
 }
 
 .preview-tile {
@@ -1613,8 +1623,8 @@ button.Withdraw {
 
 .preview-tile span {
   font-weight: bold;
-  font-size: 1.5rem;
-  letter-spacing: 0.5px;
+  font-size: 1.2rem;
+  letter-spacing: -0.1px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1725,7 +1735,130 @@ button.Withdraw {
 
 
 
+.h1s {
+    white-space: nowrap;
+}
 
+.btn.btn-back-nav {
+    float: left;
+    position: absolute;
+    left: 0px;
+    min-width:0px;
+}
+
+#global-user-label {
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    color: silver;
+    top: 2px;
+    position: relative;
+}
+
+#global-user {
+    background: transparent;
+    border: none;
+    border-bottom-width: medium;
+    border-bottom-style: none;
+    border-bottom-color: currentcolor;
+    box-shadow: none;
+    border-bottom: none !important;
+    height: 25px;
+    font-weight: bold;
+}
+
+.currency {
+    font-size: 32px;
+}
+
+.currency-balance {
+    text-shadow:
+        black -2px -2px 1px,
+        black 2px 2px 2px;
+}
+
+.offlinebanner {
+    width: 100%;
+}
+
+.offline-banner b {
+    font-size: 1rem;
+    font-weight: bold;
+}
+.offline-banner p {
+    font-size: 1rem;
+    font-weight: bold;
+    font-weight: bold;
+}
+
+.dashboardscreen {
+    margin-top: 20px;
+}
+
+.child-avatardash {
+    flex-basis: 1;
+    margin-right: 8px;
+    margin-left: -2px;
+}
+
+.child-row-info {
+    flex-basis: 100%;
+    text-align: left;
+}
+
+.allowance-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: left;
+}
+
+.allowance-label-text {
+    text-align: left;
+    font-size: 12px;
+}
+
+.btn-settings-gear-accent {
+    border: none;
+    background: transparent;
+}
+
+.currency-balance {
+    font-size: 2rem;
+}
+
+.currency-decimal {
+    font-size: 18px;
+    font-weight: normal;
+}
+
+.btn.btn-submit-tx.addc {
+    background: rgb(14, 18, 71);
+    margin: 20px;
+}
+
+.voice-modal-card {
+    position: fixed;
+    bottom: -13px;
+}
+
+.btn.btn-primary.log-submit-btn {
+    font-size: 24px;
+    height: 55px;
+    box-sizing: border-box;
+    display: flex !important;
+    place-content: center;
+    text-shadow: 1px 1px 3px black;
+}
+
+
+.card.list-card {
+  padding-left: 2px;
+  padding-right: 2px;
+}
+
+.desktop-grid-body {
+  max-height: calc(100vh - 164px);
+  overflow-y: auto;
+}
 
 /* Ensure mobile stacking rules do not distort header utilities button configurations */
 
@@ -1777,11 +1910,7 @@ button.Withdraw {
     .allowance-label-text {
         display: none;
     }
-    .rowimg {
-        position: absolute;
-        top: -6px;
-        left: 120px;
-    }
+
     .nav-and-back-group {
         display: none;
     }
