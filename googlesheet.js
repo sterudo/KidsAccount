@@ -575,7 +575,7 @@ function processMonthlyInterest() {
       if (interestEarned > 0) {
         const transactionId = "tx_interest_" + today.getTime() + "_" + childId;
         txSheet.appendRow([
-          transactionId, childId, dateString, "Monthly Interest Earned (" + (activeChildRate * 100) + "%)", "System Automated", "deposit", interestEarned, "System Scheduler", "", ""
+          transactionId, childId, dateString, "Monthly Interest Earned (" + (activeChildRate * 100) + "%)", "System Automated", "deposit", interestEarned, "System", "System", today.toISOString()
         ]);
       }
     }
@@ -631,6 +631,8 @@ function processIndividualAllowances() {
           else if (h === "type") newTxRow[idx] = "deposit";
           else if (h === "amount") newTxRow[idx] = payoutAmount;
           else if (h === "recordedby") newTxRow[idx] = "System";
+          else if (h === "device") newTxRow[idx] = "System";	
+          else if (h === "timestamp") newTxRow[idx] =  new Date().toISOString();
         });
         
         transactionSheet.appendRow(newTxRow);

@@ -38,6 +38,8 @@
 
     --mutedLabel: silver;
 
+    --labelColor: #92b5e2;
+
     --background-color:  #0f172a; 
 }
 
@@ -125,6 +127,7 @@ label {
     text-align: left;
     margin-left: 8px;
     font-size: 0.8em;
+    color: var(--labelColor);
 }
 
 input,
@@ -404,6 +407,7 @@ background: navy;
 .form-vertical-group label {
     margin-bottom: 6px;
     font-weight: bold;
+    color:var(--labelColor);
 }
 
 .form-vertical-group input {
@@ -881,7 +885,7 @@ select:active,select:focus, select:focus-visible,select:focus-within {
     .form-group label {
         position: relative;
         top: 2px !important;
-        color: #92b5e2;
+        color:var(--labelColor);
     }
 
     /* Mobile Stack List */

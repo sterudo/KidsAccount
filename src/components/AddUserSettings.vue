@@ -1,16 +1,16 @@
 <template>
   <section class="screen single-column-screen" style="margin-top:30px">
-    <div class="card structural-form" style="margin-top:30px">
+    <div class="card structural-form adduserform" style="margin-top:30px">
       <h2>Add Authorized Parent/User</h2>
       <form @submit.prevent="$emit('submit')">
         <div class="form-vertical-group">
           <label for="new-user-name">Parent Name</label>
-          <input 
+          <input maxlength="16"
             id="new-user-name" 
             :value="modelValue" 
             @input="$emit('update:modelValue', $event.target.value)" 
             type="text" 
-            placeholder="e.g. Mum" 
+            placeholder="e.g. Mum, maxlength: 16 characters, only letters A-Z and a-z" 
             required 
           />
         </div>
@@ -18,7 +18,7 @@
       </form>
       
       <div class="user-list-display">
-        <h3>Registered Users</h3>
+        <h3 style="margin-top: 16px;">Registered Users</h3>
         <p v-if="!users || users.length === 0" class="empty-state" style="font-size: 0.9em; color: #64748b;">
           No registered users found.
         </p>
@@ -61,3 +61,12 @@ defineProps({
 // Broadcast form events back up to App.vue orchestration layer
 defineEmits(['submit', 'update:modelValue', 'delete-user']);
 </script>
+<style>
+ .adduserform label {
+  color: #92b5e2;
+  font-weight: normal !important;
+  position: relative;
+  top: 8px;
+ }
+
+</style>

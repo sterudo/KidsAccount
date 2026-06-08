@@ -2350,7 +2350,7 @@ const dynamicSuggestionsWhere = computed(() => {
 function isUserDeletable(userName) {
   const hasTransactions = transactions?.value?.some(t => t.recordedBy === userName) ?? false;
   const moreThanOneUser = (users?.value?.length ?? 0) > 1;
-  
+  if(userName === "Dad" || userName === "Mum") return false;
   return !hasTransactions && moreThanOneUser;
 }
 
@@ -2362,6 +2362,20 @@ async function handleCreateUser() {
   const name = newUserFormName.value.trim();
   if (!name) return;
 
+  let closeit = false;
+  new RegExp(/^[A-Za-z]+$/).test(name) || (() => {
+    closeit = true;
+    triggerSystemAlert("Usernames must be a single word containing only letters (A-Z). Please try again.", "Validation Error");
+    
+  })();
+  if(closeit) return;
+
+  if(name.length > 16) {
+    closeit = true;
+    triggerSystemAlert("Usernames must be 16 characters or fewer. Please try again.", "Validation Error");
+   
+  }
+  if(closeit) return;
   // 1. Confirm action via custom non-blocking dialog
   const confirmed = await triggerSystemConfirm(
     `Create a new user account for "${name}"?`, 
