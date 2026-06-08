@@ -28,7 +28,7 @@
         :show-help="isSpeechHelpVisible"
         :isOnline="isOnline"
         :currentUser="currentUser"
-        @navigate="(screen) => currentScreen = screen"
+        @navigate="navigateToScreen"
         @refresh="fetchSyncDatabase"
         @request-add-child="openProfileEditorForNewChild"
         @toggle-debug="isDebugEnabled = !isDebugEnabled"
@@ -109,7 +109,7 @@
         <div class="card" style="background: #450b0b;">
           <h3>Enter Password for <em style="color:cyan">{{ resolveUserName(pendingUserId) }}</em></h3>
           <div style="display: flex; gap: 8px;"> 
-          <input type="password" v-model="passwordInput" placeholder="Password" autofocus />
+          <input type="password" v-model="passwordInput" placeholder="Password" autofocus style="max-width:120px" />
           <button @click="verifyPassword" class="btn btn-primary"  style="padding:4px;">Unlock</button>
           <button @click="isPasswordModalOpen = false" class="btn btn-secondary"  style="padding:4px;">Cancel</button>
           </div>
@@ -127,8 +127,11 @@
           v-if="currentScreen === 'addUserSettings'"
           v-model="newUserFormObject"
           :users="users"
+          :currentUser="currentUser"
           :is-user-deletable="isUserDeletable"
           @submit="handleCreateUser"
+          @edit-user="handleEditUser"
+          @new-user="navigateToScreen('addUserSettings')"
           @delete-user="handleDeleteUser"
         />
 
@@ -688,7 +691,7 @@ const transactions = ref([]);
 const editingTxId = ref(null);
 const editForm = ref({ date: '', what: '', where: '', type: 'withdrawal', amount: 0 });
 
-const newUserFormObject = ref({ name: '', role: 'user', pass: '' });
+const newUserFormObject = ref({ name: '', role: 'user', pass: '', mode: 'create', removePass: false  });
 const txForm = ref({
   date: new Date().toISOString().split('T')[0],
   what: '',
@@ -897,6 +900,14 @@ onMounted(() => {
     window.removeEventListener('popstate', handleHardwareBackButton);
   });
 });
+
+function navigateToScreen(screen) {
+  if(screen == "addUserSettings") {
+    newUserFormObject.value = { name: '', role: 'user', pass: '', mode: 'create', removePass: false  };
+  }
+  currentScreen.value = screen;
+
+}
 
 function fixParsedUsers(parsedUsers) {
   if (parsedUsers && Array.isArray(parsedUsers) && parsedUsers.length > 0) {
@@ -2367,14 +2378,30 @@ async function handleCreateUser() {
     return;
   }
   isLoading.value = true;
+  let userid = (newUserFormObject.value.mode === 'edit') ? newUserFormObject.value.id : `user-${Date.now()}`;
+  let role = newUserFormObject.value.role ? newUserFormObject.value.role : 'user';
+  if(userid === "Dad") {
+    role = 'super';
+    newUserFormObject.value.removePass = false;
+  }
+  if(userid === "Mum") {
+    role = 'admin';
+    newUserFormObject.value.removePass = false;
+  }
   const payload = {
         action: "createUser",
         fingerprint: generateDeviceFingerprint(), 
         name: name,
-        role: newUserFormObject.value.role ? newUserFormObject.value.role : 'user',
-        id: `user-${Date.now()}`,
-        pass: newUserFormObject.value.pass ? newUserFormObject.value.pass : "" 
+        role: role,
+        id: userid,
+        pass: newUserFormObject.value.pass ? newUserFormObject.value.pass : ""         
 
+      }
+      if(newUserFormObject.value.mode === 'edit') {
+        payload.action = "updateUser";
+        if(newUserFormObject.value.removePass) {
+          payload["removePass"] = true;
+        }
       }
   try {
     const response = await fetch(SHEET_API_URL, {
@@ -2385,8 +2412,15 @@ async function handleCreateUser() {
     const result = await response.json();
 
     if (result.status === "success") {
-      users.value.push({ id: payload.id, name: payload.name, role: payload.role });
-      newUserFormObject.value = { name: '', role: 'user', pass: '' };
+      if(newUserFormObject.value.mode === 'edit') {
+        const index = users.value.findIndex(u => u.id === payload.id);
+        if(index !== -1) {
+          users.value[index] = { id: payload.id, name: payload.name, role: payload.role };
+        }
+      } else {
+        users.value.push({ id: payload.id, name: payload.name, role: payload.role });
+      }
+      newUserFormObject.value = { name: '', role: 'user', pass: '', mode: 'create', removePass: false };
       logToScreen(`✅ User "${payload.name}" created successfully.`);
       await fetchSyncDatabase(true); // Silent update of user list
     } else {
@@ -2399,6 +2433,18 @@ async function handleCreateUser() {
   } finally {
     isLoading.value = false;
   }
+}
+
+async function handleEditUser(userId) {
+  const user = users.value.find(u => u.id === userId);
+  if (!user) return;
+
+  newUserFormObject.value.name = user.name;
+  newUserFormObject.value.role = user.role;  
+  newUserFormObject.value.id = user.id;
+  newUserFormObject.value.mode = 'edit';
+  currentScreen.value = 'addUserSettings';
+  
 }
 
 /**
@@ -2415,8 +2461,8 @@ async function handleDeleteUser(userId) {
 
   // 1. Confirm action via custom non-blocking dialog
   const confirmed = await triggerSystemConfirm(
-    `Are you sure you want to revoke system privileges for ${user.name}? This action cannot be undone.`, 
-    "⚠️ Revoke User Access"
+    `Are you sure you want to delete user: ${user.name}? This action cannot be undone.`, 
+    "⚠️ Delete User"
   );
 
   if (!confirmed) return;
@@ -2503,6 +2549,9 @@ function commitUserChange(id) {
   isPasswordModalOpen.value = false;
   currentUserId.value = id;
   currentUser.value = users.value.find(u => u.id === id) || { id: 'Dad', name: 'Stephan', role: 'super' };
+  if(currentUser.value.role === 'user') {
+    navigateToScreen('dashboard'); 
+  }
   localStorage.setItem('pocket_money_active_user', id);
 }
 

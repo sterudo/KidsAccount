@@ -409,14 +409,14 @@ function doPost(e) {
 
       if (foundRowIndex !== -1) {
           txHeaders.forEach((header, colIndex) => {
-            const cell = data.getRange(foundRowIndex, colIndex + 1);
+            const cell = usersSheet.getRange(foundRowIndex, colIndex + 1);
             if (header === "name") cell.setValue(tx.name);
             else if (header === "role") cell.setValue(tx.role);
             else if (header === "pass" && (tx.pass ||tx.removePass)) cell.setValue(tx.removePass ? "" : tx.pass);           
           });
-          result = { status: "success", message: "User profile  has bin updated." };
+          result = { status: "success", message: "User profile  has been updated." };
         } else {
-          throw new Error("Specified User profile ID could not be matched for deletion.");
+          throw new Error("Specified User profile ID could not be matched for editing.");
         } 
     }  
 
