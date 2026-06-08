@@ -144,6 +144,7 @@ function doPost(e) {
     const sheet = SpreadsheetApp.getActiveSpreadsheet();
     const txSheet = sheet.getSheetByName("transactions");
     const childrenSheet = sheet.getSheetByName("children");
+    const usersSheet = sheet.getSheetByName("users");
 
     
     // --- ACTIONS LAYER 1: APPEND STANDARD TRANSACTION ---
@@ -355,6 +356,36 @@ function doPost(e) {
       
       result = { status: "success", message: "Child configurations synchronized cleanly." };
     }
+
+    else if(action === "createUser") {
+      const headers = usersSheet.getDataRange().getValues()[0].map(h => String(h).toLowerCase().trim());
+      let newRow = new Array(headers.length).fill("");
+      headers.forEach((h, i) => {
+          if (h === "id") newRow[i] = payload.name;                
+      });
+      usersSheet.appendRow(newRow);
+      result = { status: "success", message: "USer account recorded successfully." };
+    }
+
+  else if(action === "deleteUser") {
+    const data = usersSheet.getDataRange().getValues();
+    const idIdx = data[0].map(h => String(h).toLowerCase().trim()).indexOf("id");
+    
+    let targetRowIndex = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][idIdx]).trim() === String(payload.name).trim()) {
+        targetRowIndex = i + 1; // 1-based indexing for sheets range rows
+        break;
+      }
+    }
+
+    if (targetRowIndex !== -1) {
+      usersSheet.deleteRow(targetRowIndex);
+      result = { status: "success", message: "User profile permanently removed from directory." };
+    } else {
+      throw new Error("Specified User profile ID could not be matched for deletion.");
+    }  
+  }
     
     else if (action === "createChild") {      
       if (!childrenSheet) throw new Error("The 'children' sheet tab could not be found.");

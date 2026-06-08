@@ -2370,6 +2370,10 @@ async function handleCreateUser() {
 
   if (!confirmed) return;
 
+  if(users.value.find(u => u.name.toLowerCase() === name.toLowerCase())) {
+    // User exists, nothing to do
+    return;
+  }
   isLoading.value = true;
   
   try {
@@ -2377,6 +2381,7 @@ async function handleCreateUser() {
       method: "POST",
       body: JSON.stringify({
         action: "createUser",
+        fingerprint: generateDeviceFingerprint(), 
         name: name
       })
     });
@@ -2384,6 +2389,7 @@ async function handleCreateUser() {
     const result = await response.json();
 
     if (result.status === "success") {
+      users.value.push(name);
       newUserFormName.value = "";
       logToScreen(`✅ User "${name}" created successfully.`);
       await fetchSyncDatabase(true); // Silent update of user list
@@ -2428,6 +2434,7 @@ async function handleDeleteUser(userName) {
     const result = await response.json();
 
     if (result.status === "success") {
+      users.value.splice(users.value.findIndex(u => u.name === userName), 1);
       logToScreen(`🗑️ Access revoked for user: ${userName}.`);
       // 3. Refresh database state
       await fetchSyncDatabase(true); 

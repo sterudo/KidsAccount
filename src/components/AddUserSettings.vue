@@ -1,6 +1,6 @@
 <template>
-  <section class="screen single-column-screen">
-    <div class="card structural-form" slyle="margin-top:30px">
+  <section class="screen single-column-screen" style="margin-top:30px">
+    <div class="card structural-form" style="margin-top:30px">
       <h2>Add Authorized Parent/User</h2>
       <form @submit.prevent="$emit('submit')">
         <div class="form-vertical-group">
