@@ -1,7 +1,7 @@
 {
   "name": "kidsaccount",
   "private": true,
-  "version": "0.70.0",
+  "version": "0.72.0",
   "type": "module",
   "scripts": {
       "test": "vitest",

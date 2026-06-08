@@ -979,7 +979,7 @@ async function checkNetworkConnectivity() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second max timeout threshold
 
-    const response = await fetch("https://api.github.com", { 
+    const response = await fetch("https://jsonplaceholder.typicode.com", { 
       method: 'GET',
       mode: 'cors',
       cache: 'no-store',
@@ -3050,39 +3050,46 @@ const resolvedAvatarSrc = computed(() => {
 // 🔄 3. Background Sync Worker: Downloads and writes images to disk as string blocks
 const activeSyncs = new Set();
 
+function triggerSilentAvatarSync(childId, fileId) {
+  if (!isOnline.value || !fileId || activeSyncs.has(childId)) return;
+  lazyUpdateAvatarCacheInBackground(childId, fileId);
+}
+
+const AlastSyncTimestamps = new Map();
+const ASYNC_COOLDOWN_MS = 30000; // 30 seconds protection window
 async function lazyUpdateAvatarCacheInBackground(childId, fileId) {
   // Guard: Offline status, missing ID, or already in-progress sync
   if (!isOnline.value || !fileId || activeSyncs.has(childId)) return;
 
+  const now = Date.now();
+  
+  let timeStamp = AlastSyncTimestamps.get(childId) || 0;
+  // 1. 🌟 PROTECTION LAYER: Prevent rapid-fire bursts ifCalled too frequently
+  if (now - timeStamp < ASYNC_COOLDOWN_MS) {
+    console.log("📶 Background sync skipped: Cooldown active to prevent Google 429 throttling.");
+    return; 
+  }
+
+
   activeSyncs.add(childId);
 
   try {
-    const targetUrl = `https://drive.google.com/thumbnail?sz=w500&id=${fileId}`;
-    const response = await fetch(targetUrl);
-    
-    if (!response.ok) throw new Error("Network image delivery rejected");
-    
-    const blob = await response.blob();
-    const reader = new FileReader();
-    
-    // Using a Promise wrapper for the FileReader to clean up the async flow
-    const base64DataString = await new Promise((resolve, reject) => {
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+    //const targetUrl = `https://drive.google.com/thumbnail?sz=w500&id=${fileId}`;
+
+    const base64DataString = await fetchAvatarProxy(fileId);
 
     // Update reactive cache
     avatarBase64Cache.value[childId] = base64DataString;
     
     // Persist to local storage
     localStorage.setItem(AVATAR_CACHE_KEY, JSON.stringify(avatarBase64Cache.value));
-
+    AlastSyncTimestamps.set(childId, Date.now());
   } catch (err) {
     console.warn(`Silent background avatar cache synchronization bypassed: ${err.message}`);
   } finally {
     // Always remove from active set, regardless of success or failure,
     // to allow for future retries if the network issue resolves
+   
     activeSyncs.delete(childId);
   }
 }
@@ -3103,6 +3110,7 @@ function resolveAndCacheAvatar(child) {
   if (avatarBase64Cache.value[childId]) {
     // Quietly sync background tracks to ensure it's up-to-date
     lazyUpdateAvatarCacheInBackground(childId, fileId);
+    console.log("🎯 Avatar cache hit for child ID:", childId);
     return avatarBase64Cache.value[childId];
   }
 
@@ -3125,12 +3133,31 @@ function getListAvatarSrc(child) {
   
   // Return the base64 string directly from disk cache if present
   if (avatarBase64Cache.value[childId]) {
+    console.log("🎯 Avatar cache hit for child ID:", childId);
     return avatarBase64Cache.value[childId];
   }
   
   // Kick off background cache download for this list item
   lazyUpdateAvatarCacheInBackground(childId, fileId);
   return `https://drive.google.com/thumbnail?sz=w500&id=${fileId}`;
+}
+
+async function fetchAvatarProxy(fileId) {
+  // Use your existing SHEET_API_URL, just change the action
+  const proxyUrl = `${SHEET_API_URL}?action=getAvatarProxy&fileId=${fileId}&fingerprint=${encodeURIComponent(deviceFingerprint.value || '')}`;
+  
+  try {
+    const response = await fetch(proxyUrl);
+    const result = await response.json();
+    if (result.status === "success") {
+      return result.data; // This is the ready-to-use "data:image/..." string
+    } else {
+      return null;
+    }
+  } catch (err) {
+    console.error("Proxy fetch failed:", err);
+    return null;
+  }
 }
 
 //#endregion

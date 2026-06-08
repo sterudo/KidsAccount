@@ -8,7 +8,6 @@ export function formatCurrency(value) {
   return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(v); 
 }
 
-
 /**
  * Formats an ISO-8601 timestamp string into a concise, readable presentation format.
  * Transforms '2026-06-02T19:45:00.000Z' into '02/06 19:45'.

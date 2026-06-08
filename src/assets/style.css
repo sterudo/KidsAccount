@@ -19,6 +19,26 @@
     --success-dark: #048838;
     --danger-dark: #e44242;
     --border-color: #334155; /* Subtle divider lines that split elements without being harsh */
+
+    --highContrastText: #ffffff;
+
+    --h1grad1:  #6378a1;
+    --h1grad2:  #010102;
+    --h1grad3:  #344972 ;
+    --h1grad4:  #002754;
+    --inputBG: #131216;
+
+    --colorInputBG: black;
+
+    --Hcolor:  #c0d7f1;
+
+    --shadowColor:  rgba(15, 23, 42, 0.75);
+
+    --appHeader: #17192d;
+
+    --mutedLabel: silver;
+
+    --background-color:  #0f172a; 
 }
 
 body {
@@ -34,9 +54,9 @@ h1 {
     letter-spacing: -1.68px;
     margin: 0px;
     margin-top: 0px;
-    color: white;
+    color: var(--highContrastText);
     margin-top: 0px;
-    background: linear-gradient(180deg, #6378a1 0%, #010102 13%, #344972 100%) #002754;  
+    background: linear-gradient(180deg, var(--h1grad1) 0%, var(--h1grad2) 13%, var(--h1grad3) 100%) var(--h1grad4);  
     position: sticky;
     top: 0px;
     z-index: 1000;
@@ -53,7 +73,7 @@ h1 {
 }
 
 textarea {
-    font-family: arial;
+  font-family: arial;
   border: none;
   border-bottom-width: medium;
   border-bottom-style: none;
@@ -62,8 +82,8 @@ textarea {
   border-bottom: 2px solid var(--border-color) !important;
   border-radius: 6px;
   font-size: 1rem;
-  color: white !important;
-  background: #131216;
+  color: var(--highContrastText) !important;
+  background: var(--inputBG);
 }
 
 input[type="color"] {    
@@ -72,8 +92,8 @@ input[type="color"] {
     height: 30px !important;
     padding: 0px !important;
     border-radius: 5p !important;
-    border: 2px solid black !important;
-    background: black !important;
+    border: 2px solid var(--colorInputBG) !important;
+    background: var(--colorInputBG) !important;
 }
 
 .versionno {
@@ -82,7 +102,7 @@ input[type="color"] {
     position: absolute;
     top: -4px;
     left: 132px;
-    color: green;
+    color: var(--success-dark);
 }
 
 h2 {
@@ -90,12 +110,12 @@ h2 {
     line-height: 118%;
     letter-spacing: -0.24px;
     margin: 0 0 8px;
-    color: #c0d7f1;
+    color: var(--Hcolor);
     font-weight: bold;
 }
 
 h3 {
-    color: #c0d7f1;
+    color: var(--Hcolor);
     margin-top: 0px;
     margin-bottom: 10px;
     text-align: left;
@@ -111,17 +131,15 @@ input,
 select {
     font-family: arial, sans-serif;
     padding: 6px !important;
-    background: #131216;
-    color: white !important;
+    background: var(--inputBG);
+    color: var(--highContrastText) !important;
 }
-
 
 .modal-overlay {
     padding:0px !important;
 }
 
 select#global-user { 
-
     width: min-content;
     font-size: 12px;
     height: 28px;
@@ -137,7 +155,7 @@ select#global-user {
     left: 0;
     width: 100vw;
     height: 100vh;
-    background: rgba(15, 23, 42, 0.75); /* Dims the dark mode app smoothly */
+    background: var(--inputBG); /*  rgba(15, 23, 42, 0.75) Dims the dark mode app smoothly */
     backdrop-filter: blur(4px); /* Softly blurs background elements */
     display: flex;
     justify-content: center;
@@ -152,7 +170,7 @@ select#global-user {
     padding: 24px 40px;
     border-radius: 12px;
     border: 1px solid var(--border-color);
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 10px 25px -5px var(--shadowColor);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -214,7 +232,7 @@ select#global-user {
     gap: 12px;
     position: sticky;
     top: 43px;
-    background: #17192d;
+    background: var(--appHeader);
     z-index: 1000;
     flex-wrap: wrap;
 }
@@ -253,26 +271,17 @@ select#global-user {
     background: var(--card-bg);
     border-radius: 12px;
     padding: 20px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 1px 3px var(--shadowColor);
     margin-bottom: 20px;
 }
 
 .balancelabel {
-        font-size: 10px;
-  font-weight: normal;
-  position: absolute;
-  top: -5px;
-  right: 18px;
+    font-size: 10px;
+    font-weight: normal;
+    position: absolute;
+    top: -5px;
+    right: 18px;
 }
-/*
-
-.loading-overlay-indicator {
-  background:#373210; 
-  color:white;
-  padding:8px; font-weight:bold; text-align:center; border-radius:6px; margin-bottom:12px;
-}
-
-*/
 
 /* SINGLE CARDS ROW PER CHILD */
 .dashboard-rows-container {
@@ -280,6 +289,7 @@ select#global-user {
     flex-direction: column;
     gap: 12px;
 }
+
 .child-row-layout {
     display: flex;
   background: linear-gradient(13deg, #182848 0%, #010102 17%, #182848 100%);
@@ -289,6 +299,7 @@ select#global-user {
   overflow: hidden;
   box-shadow: 0px 0px 5px 1px inset #5589;
 }
+
 .child-row-click-area {
     display: flex;
     flex: 1;
@@ -297,10 +308,12 @@ select#global-user {
     padding: 12px;
     cursor: pointer;
 }
+
 .child-row-click-area:hover {
     background: #19296a7a;
     transition: background 0.2s ease-in-out;
 }
+
 .child-row-info h3 {
     margin: 0 0 4px 0;
     font-size: 1.5rem;
@@ -317,6 +330,7 @@ select#global-user {
     text-align: center;
     box-sizing: border-box;
 }
+
 .child-row-actions {
     padding-right: 0px;
 }
@@ -333,18 +347,21 @@ select#global-user {
     white-space: nowrap;
     min-width:80px;
 }
+
 .btn-primary {
     background: var(--primary);
-    color: white;
+    color: var(--highContrastText);
 }
+
 .btn-secondary {
     background: var(--secondary);
     color: var(--primary);
 }
 .btn-success {
     background: var(--success-dark);
-    color: white;
+    color: var(--highContrastText);
 }
+
 .btn-delete-row {
     background: #fef2f2;
     color: #b91c1c;
@@ -353,6 +370,7 @@ select#global-user {
     cursor: pointer;
     font-weight: 600;
 }
+
 .btn-delete-small {
     padding: 2px 6px;
     font-size: 0.75rem;
@@ -367,29 +385,35 @@ select#global-user {
     max-width: 450px;
     margin: 0 auto;
 }
+
 .form-vertical-group {
     display: flex;
     flex-direction: column;
     margin-bottom: 16px;
 }
+
 .form-vertical-group label {
     margin-bottom: 6px;
     font-weight: bold;
 }
+
 .form-vertical-group input {
     padding: 12px;
     font-size: 1rem;
     border: 1px solid var(--border-color);
     border-radius: 6px;
 }
+
 .block-btn {
     width: 100%;
     padding: 12px;
 }
+
 .deletable-list {
     list-style: none;
     padding: 0;
 }
+
 .deletable-list li {
     display: flex;
     justify-content: space-between;
@@ -404,6 +428,7 @@ select#global-user {
     align-items: flex-end;
     grid-template-columns: 1fr 1fr;
 }
+
 .form-group {
     display: flex;
     flex-direction: column;
@@ -411,10 +436,12 @@ select#global-user {
     min-width: 140px;
     margin-top: 8px;
 }
+
 .log-submit-btn {
     padding: 12px 24px;
     min-width: 100px;
 }
+
 input,
 select {
     border: none;
@@ -422,7 +449,7 @@ select {
     border-bottom: 2px solid var(--border-color) !important;
     border-radius: 6px;
     font-size: 1rem;
-    color: white !important;
+    color: var(--highContrastText) !important;
 }
 
 /* ROBUST CSS GRID DIRECT REPLACEMENT FOR TRADITIONAL HTML TABLES */
@@ -433,6 +460,7 @@ select {
     overflow: hidden;
     background: white;
 }
+
 .desktop-grid-header {
     display: grid;
     grid-template-columns: 100px 1fr 1fr 90px 110px;
@@ -1656,7 +1684,7 @@ select:active,select:focus, select:focus-visible,select:focus-within {
 
 /* --- 📸 INTERACTIVE STUDIO STYLING THEMES --- */
 .avatar-workspace-container {
-  background: #0f172a;
+  background: var(--background-color);
   padding: 14px;
   border-radius: 8px;
   border: 1px dashed #475569;
@@ -1671,10 +1699,10 @@ select:active,select:focus, select:focus-visible,select:focus-within {
 
 .cropper-studio {
   margin-top: 15px;
-  background: #020617;
+  background: var(--background-color);
   padding: 10px;
   border-radius: 6px;
-  border: 1px solid #1e293b;
+  border: 1px solid var(--border-color);
 }
 
 .cropper-canvas-wrapper {
@@ -1749,7 +1777,7 @@ select:active,select:focus, select:focus-visible,select:focus-within {
 #global-user-label {
     font-size: 12px;
     letter-spacing: 0.5px;
-    color: silver;
+    color: var(--mutedLabel);
     top: 2px;
     position: relative;
 }
@@ -1846,7 +1874,7 @@ select:active,select:focus, select:focus-visible,select:focus-within {
     box-sizing: border-box;
     display: flex !important;
     place-content: center;
-    text-shadow: 1px 1px 3px black;
+    text-shadow: 1px 1px 3px var(--shadowColor);
 }
 
 
@@ -1871,12 +1899,13 @@ select:active,select:focus, select:focus-visible,select:focus-within {
         grid-template-columns: 1fr;
         gap: 12px;
     }
+
     .locationP {
         margin: 0px;
         padding: 0px;
         position: relative;
         top: -5px;
-        color: #9db5db;
+        color: var(--Hcolor);
         font-style: italic;
     }
 

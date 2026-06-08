@@ -9,8 +9,10 @@ function doGet(e) {
   SpreadsheetApp.flush(); 
   
   const fingerprint = e && e.parameter ? String(e.parameter.fingerprint).trim() : "";
-  
-  if (!isAuthenticatedDevice(fingerprint)) {
+  const action = e && e.parameter ? e.parameter.action : "";
+  const isPublicAction = (action === "getAvatarProxy" || action === "getDatabase" || action === "getInitialData" );
+    
+   if (!isPublicAction && !isAuthenticatedDevice(fingerprint)) {
     return ContentService.createTextOutput(JSON.stringify({ 
       status: 403, 
       error: "Unauthorized", 
@@ -70,8 +72,20 @@ function doGet(e) {
     }
   }
   
-  const action = e && e.parameter ? e.parameter.action : "";
-  
+  if (action === "getAvatarProxy") {
+    const fileId = e.parameter.fileId;
+    const file = DriveApp.getFileById(fileId);
+    const blob = file.getBlob();
+    const base64 = Utilities.base64Encode(blob.getBytes());
+    const mimeType = blob.getContentType();
+    
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      data: `data:${mimeType};base64,${base64}`
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+
   // FIXED: Logic handles 'getDatabase' and 'getInitialData' actions
   if (action === "getDatabase" || action === "getInitialData" || !action) {
     return ContentService.createTextOutput(JSON.stringify({
