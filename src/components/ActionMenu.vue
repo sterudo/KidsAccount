@@ -44,6 +44,14 @@
                 <button type="button" class="menu-item" @click="triggerAction('aboutDialog')">
                     <span class="menu-item-icon">ℹ️</span> About This App
                 </button>
+
+                  <hr class="menu-divider" />
+                <div class="menu-section-title">Admin Controls</div>
+
+                <button :disabled="!isOnline" type="button" class="menu-item" 
+                  @click="triggerAction('deviceAuth')">
+                    <span class="menu-item-icon">🛡️</span> Manage Device Auth
+                </button>
             </div>
         </transition>
     </div>
@@ -94,6 +102,8 @@ function triggerAction(actionType) {
         emit('toggle-help');
     } else if (actionType === 'aboutDialog') {
         emit('about');
+    } else if (actionType === 'deviceAuth') {
+        emit('navigate', 'deviceAuth');
     }
 }
 

@@ -45,10 +45,20 @@
   <div id="app">
     <div v-if="isDeviceUnauthorized" class="card auth-warning-card">
       <h4>🔒 Authorizing this device ... please wait</h4>
-      <p>If this message persists, please add this device's fingerprint ID to your <code>authorized_devices</code> spreadsheet tab:</p>
-      <div class="fingerprint-badge">
+      <p>This is your devive fingerprint: <div class="fingerprint-badge" style="display:inline-block">
         <code>{{ deviceFingerprint }}</code>
+      </div></p>
+      <div>
+        <button @click="requestAuth" class="btn btn-primary request-auth-btn" v-if="!requestSent">
+            Request Authorisation
+        </button>
+        <p v-if="requestSent">Request sent! An administrator must now approve this device in the Device Manager.</p>
+
+        <button @click="refreshAuthStatus" class="btn btn-primary refresh-auth-btn" :disabled="isChecking">
+        {{ isChecking ? 'Verifying...' : 'Refresh' }}
+        </button>
       </div>
+      
     </div>
 
     <div v-else>
@@ -114,6 +124,14 @@
           :fingerprint="deviceFingerprint"
           :is-online="isOnline"
           @trigger-refresh="fetchSyncDatabase(false)" 
+        />
+
+        <DeviceAuthManager 
+          v-if="currentScreen === 'deviceAuth'"
+          :api-url="SHEET_API_URL"
+          :fingerprint="deviceFingerprint"
+          :is-online="isOnline"
+          @trigger-refresh="fetchSyncDatabase(true)"
         />
 
         <!-- VIEW 3: DASHBOARD (One Kid Per Row Layout) -->
@@ -594,6 +612,7 @@
     @upload-avatar="handleAvatarDirectUpload"
   />
 
+   
    <SystemConfirm ref="confirmDialog" />
    <DialogModal ref="dialogModal" />
 </template>
@@ -612,6 +631,7 @@ import AboutDialog from '@/components/AboutDialog.vue';
 import BackupSettings from '@/components/BackupSettings.vue';
 import ChildProfileModal from '@/components/ChildProfileModal.vue';
 import SystemConfirm from '@/components/SystemConfirm.vue';
+import DeviceAuthManager from '@/components/DeviceAuthManager.vue';
 
 import { 
   formatCurrency, 
@@ -681,6 +701,7 @@ const lastSyncTime = ref(0);
 // Voice State Controls
 const isVoiceModalOpen = ref(false);
 const isListening = ref(false);
+const requestSent = ref(false);
 const voiceTranscript = ref('');
 const showIfProblem = ref(false); // Flag to show transcript review only when needed
 const voiceLogs = ref([]); // 🌟 NEW: Array to hold on-screen telemetry logs
@@ -746,6 +767,7 @@ const hiddenCameraInput = ref(null);
 const authorizedDevices = ref([]);
 let rawImageElement = null; // Memory allocation handle for image files
 let activeRecognitionInstance = null;
+const isChecking = ref(false);
 
 
 
@@ -1097,9 +1119,8 @@ async function fetchSyncDatabase(isBackground = false) {
       config: systemConfig.value,
       avatars: avatars.value
     }));
-
+    isAuthenticated.value = true;
     console.log("💾 Ledger synchronization finalized successfully. Local storage updated.");
-
   } catch (err) {
     console.error("❌ Network sync exception encountered:", err);
     // Enforce error cooling-off window backoff to protect browser execution threads
@@ -1167,10 +1188,12 @@ function purgeLocalStorageAuth() {
   }
 
   // 5. Fire modal warning window notification alert to the physical operator
+  /*
   triggerSystemAlert(
     "This device is not authorized to view this ledger data.", 
     "🔒 Security Alert"
   );
+  */
 }
 
 
@@ -1192,6 +1215,52 @@ function triggerBackgroundRefresh() {
   } else {
     const remainingSeconds = Math.round((FIVE_MINUTES_MS - timeSinceLastSync) / 1000);
     console.log(`📶 Throttled sync blocked: Only ${Math.round(timeSinceLastSync / 1000)}s since last successful sync. Must wait ${remainingSeconds}s.`);
+  }
+}
+
+
+async function refreshAuthStatus() {
+  isChecking.value = true;
+  
+  // 1. Re-initialize/Sync again
+  // Assuming fetchSyncDatabase(false) triggers the main data load
+  await fetchSyncDatabase(false);
+  
+  isChecking.value = false;
+}
+
+/**
+ * Triggers an authorization request for the current device.
+ * Sends the fingerprint to the server to be added to the pending queue.
+ */
+async function requestAuth() {
+
+  try {
+    logToScreen("Sending authorization request to administrator...");
+     requestSent.value = true;
+    let response = await fetch(SHEET_API_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "requestAuth",
+        fingerprint: "request",
+        timestamp: new Date().toISOString(),
+        requestFingerprint:  deviceFingerprint.value
+      })
+    });
+
+    let result = await response.json();
+    if (result.status === "success") {      
+      logToScreen("✅ Authorization request sent successfully. Please ask the administrator to approve this device.");
+    } else {
+      requestSent.value = false;
+      triggerSystemAlert("Failed to submit request.");
+    }
+  } catch (err) {
+    requestSent.value = false;
+    console.error("Auth request error:", err);
+    triggerSystemAlert(`Request failed: ${err.message}`, "❌ Request Failed");
+  } finally {
+    // isRequesting.value = false;
   }
 }
 

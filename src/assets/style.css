@@ -326,8 +326,8 @@ select#global-user {
     padding: 8px;
     border-radius: 6px;
     white-space: nowrap;
-    min-width: 110px;
-    text-align: center;
+    min-width: 125px;
+    text-align: right;
     box-sizing: border-box;
 }
 
@@ -352,6 +352,15 @@ select#global-user {
     background: var(--primary);
     color: var(--highContrastText);
 }
+
+.refresh-auth-btn {  
+    background: darkgreen;
+}
+
+.request-auth-btn {
+background: navy;
+}
+
 
 .btn-secondary {
     background: var(--secondary);
