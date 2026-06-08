@@ -138,6 +138,11 @@ select {
     color: var(--highContrastText) !important;
 }
 
+option {
+    background: black;
+    color: white;
+}
+
 .modal-overlay {
     padding:0px !important;
 }
@@ -286,6 +291,10 @@ select#global-user {
     right: 18px;
 }
 
+.error-message {
+    color: red;
+}
+
 /* SINGLE CARDS ROW PER CHILD */
 .dashboard-rows-container {
     display: flex;
@@ -315,6 +324,10 @@ select#global-user {
 .child-row-click-area:hover {
     background: #19296a7a;
     transition: background 0.2s ease-in-out;
+}
+.child-row-click-area:hover img {
+    transform: rotate(-5deg) scale(1.1);
+    transition: transform 0.5s ease-in-out;
 }
 
 .child-row-info h3 {
@@ -476,24 +489,25 @@ select {
 
 .desktop-grid-header {
     display: grid;
-    grid-template-columns: 100px 1fr 1fr 90px 110px;
+    grid-template-columns: 80px 1fr 1fr 90px 110px;
     background: #101011;
-    padding: 12px;
+    padding: 8px;
     font-weight: bold;
-    font-size: 0.95rem;
-    border-bottom: 2px solid var(--border-color);
+    font-size: 0.85rem;
+    padding-right:20px;    
 }
 .desktop-grid-header.with-meta {
-    grid-template-columns: 100px 1fr 1fr 90px 110px 130px 120px 120px;
+    grid-template-columns: 80px 1fr 1fr 90px 110px  80px 140px 90px;
 }
 .desktop-grid-row {
     display: grid;
-    padding: 8px;
-    border-bottom: 1px solid var(--border-color);
+    padding: 8px;    
     align-items: center;
     font-size: 0.95rem;
     padding-top: 2px;
     padding-bottom: 2px;
+    line-height: 1.3em;
+    color: #eef;
 }
 .desktop-grid-row:nth-child(even) {
     background: #505051;
@@ -506,6 +520,18 @@ select {
 }
 .clickable-last-row:hover {
     background-color: #423308 !important;
+    cursor:pointer !important;
+}
+
+
+.image-preview:hover {
+    background-color: #070017 !important;
+    cursor:pointer !important;
+}
+
+.image-preview:hover b.camera {
+    background: white;
+    border-radius: 3px;
 }
 .editing-row {
     background: #362a06 !important;
@@ -1890,6 +1916,13 @@ select:active,select:focus, select:focus-visible,select:focus-within {
     text-shadow: 1px 1px 3px var(--shadowColor);
 }
 
+.btn.btn-primary:hover {
+    background: navy;
+}
+
+.btn.btn-secondary:hover {
+    background: #334;
+}
 
 .card.list-card {
   padding-left: 2px;
@@ -1918,7 +1951,7 @@ select:active,select:focus, select:focus-visible,select:focus-within {
         padding: 0px;
         position: relative;
         top: -5px;
-        color: var(--Hcolor);
+        color:#7ab8ff;
         font-style: italic;
     }
 
@@ -1939,7 +1972,7 @@ select:active,select:focus, select:focus-visible,select:focus-within {
 
     .desktop-grid-header,
     .desktop-grid-row {
-        grid-template-columns: 70px 1fr 110px !important;
+        grid-template-columns: 60px 1fr 100px !important;
     }
 
     .desktop-grid-row.editing-row {

@@ -7,28 +7,28 @@
 
         <transition name="dropdown-fade">
             <div v-if="isOpen" class="menu-dropdown-card">
-                <div class="menu-section-title">Navigation & Profiles</div>
+                <div class="menu-section-title" v-if="currentUser.role == 'admin' || currentUser.role == 'super'">Navigation & Profiles</div>
 
                 <button :disabled="!isOnline" type="button" class="menu-item" :class="{ 'isDisabled': !isOnline }"
-                    @click="triggerAction('addUserSettings')">
+                    @click="triggerAction('addUserSettings')" v-if="currentUser.role == 'admin' || currentUser.role == 'super'" >
                     <span class="menu-item-icon">👥</span> Add / Manage Parents
                 </button>
 
-                <button :disabled="!isOnline" type="button" class="menu-item" :class="{ 'isDisabled': !isOnline }"
+                <button :disabled="!isOnline" type="button" v-if="currentUser.role == 'admin' || currentUser.role == 'super'" class="menu-item" :class="{ 'isDisabled': !isOnline }"
                     @click="$emit('request-add-child')">
                     <span class="menu-item-icon">👦</span> Add New Child Profile
                 </button>
 
-                <hr class="menu-divider" />
+                <hr class="menu-divider" v-if="currentUser.role == 'admin' || currentUser.role == 'super'" />
 
-                <div class="menu-section-title">System Utilities</div>
+                <div class="menu-section-title" v-if="currentUser.role == 'admin' || currentUser.role == 'super'">System Utilities</div>
 
                 <button :disabled="!isOnline" type="button" class="menu-item" :class="{ 'isDisabled': !isOnline }"
                     @click="triggerAction('refreshDatabase')">
                     <span class="menu-item-icon">🔄</span> Refresh / Sync
                 </button>
                 <button :disabled="!isOnline" type="button" class="menu-item" :class="{ 'isDisabled': !isOnline }"
-                    @click="triggerAction('backupSettings')">
+                    @click="triggerAction('backupSettings')" v-if="currentUser.role == 'super'" >
                     <span class="menu-item-icon">💾</span> Backup & Restore
                 </button>
 
@@ -37,7 +37,7 @@
                 </button>
 
                 <button type="button" class="menu-item debug-toggle" :class="{ 'debug-on': debugMode }"
-                    @click="triggerAction('toggleDebug')">
+                    @click="triggerAction('toggleDebug')" v-if="currentUser.role == 'admin' || currentUser.role == 'super'" >
                     <span class="menu-item-icon">⚙️</span> Debug Console: {{ debugMode ? 'ON' : 'OFF' }}
                 </button>
 
@@ -45,11 +45,11 @@
                     <span class="menu-item-icon">ℹ️</span> About This App
                 </button>
 
-                  <hr class="menu-divider" />
-                <div class="menu-section-title">Admin Controls</div>
+                  <hr class="menu-divider" v-if="currentUser.role == 'super'" />
+                <div class="menu-section-title" v-if="currentUser.role == 'super'">Admin Controls</div>
 
                 <button :disabled="!isOnline" type="button" class="menu-item" 
-                  @click="triggerAction('deviceAuth')">
+                  @click="triggerAction('deviceAuth')" v-if="currentUser.role == 'super'">
                     <span class="menu-item-icon">🛡️</span> Manage Device Auth
                 </button>
             </div>
@@ -73,6 +73,10 @@ defineProps({
         type: Boolean,
         default: false
     },
+    currentUser : {
+        type: Object,
+        default: { }
+    }
 });
 
 const emit = defineEmits(['navigate', 'refresh', 'toggle-debug', 'toggle-help']);

@@ -27,7 +27,7 @@ function doGet(e) {
   const userSheet = sheet.getSheetByName("users");
   const avatarSheet = sheet.getSheetByName("avatars");
 
-  function parseSheetRecords(targetSheet) {
+  function parseSheetRecords(targetSheet, suppressColumn = []) {
     if (!targetSheet) return [];
     const range = targetSheet.getDataRange();
     const data = range.getValues();
@@ -43,7 +43,9 @@ function doGet(e) {
         if (val instanceof Date) {
           val = Utilities.formatDate(val, Session.getScriptTimeZone(), "yyyy-MM-dd");
         }
-        obj[header] = val;
+        if(!suppressColumn.includes(header)) {
+          obj[header] = val;
+        }
       });
       records.push(obj);
     }
@@ -53,14 +55,10 @@ function doGet(e) {
   const children = parseSheetRecords(childrenSheet);
   const transactions = parseSheetRecords(txSheet);
   const avatarsHistory = parseSheetRecords(avatarSheet);
+ 
   
-  let usersList = ["Dad", "Mum"];
-  if (userSheet) {
-    const userValues = userSheet.getDataRange().getValues();
-    usersList = userValues.slice(1)
-                      .map(row => String(row[0]).trim())
-                      .filter(name => name.length > 0);
-  }
+  let usersList = parseSheetRecords(userSheet, ["pass"]);
+  
 
   let systemConfig = {};
   if (configSheet) {
@@ -136,7 +134,7 @@ function doPost(e) {
 
     if (!isAuthenticatedDevice(fingerprint, action)) {
       return ContentService.createTextOutput(JSON.stringify({ 
-        status: 403, error: "Unauthorized", message: "Action rejected. Device unauthorized." 
+        status: 403, error: "Unauthorized", message: "Action rejected. Device unauthorized. " + fingerprint 
       })).setMimeType(ContentService.MimeType.JSON);
     }
     
@@ -196,6 +194,30 @@ function doPost(e) {
       result = { status: "success", message: "Transaction written to spreadsheet.", fileUrl: fileUrl };
     }
     
+    else if(action === "verifyPassword") {
+      let userId = payload.userId;
+      let password = payload.password;
+      const data = usersSheet.getDataRange().getValues();
+      const txHeaders = data[0].map(h => String(h).toLowerCase().trim());
+      const idIdx = txHeaders.indexOf("id");
+      const passIdx =  txHeaders.indexOf("pass");
+   
+      
+      let foundRowIndex = -1;
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][idIdx]).trim() === String(userId).trim()        
+        && String(data[i][passIdx]).trim() === String(password).trim()) {
+          foundRowIndex = i + 1; // 1-based indexing for sheets range rows
+          break;
+        }
+      }
+      if(foundRowIndex > -1) {
+         result = { status: "success"};
+      } else {
+          result = { status: "error" };
+      }
+    }
+
     // --- ACTIONS LAYER: ATOMIC DUAL TRANSFER WRITER ---
     else if (action === "addTransfer") {
       const txHeaders = txSheet.getDataRange().getValues()[0].map(h => String(h).toLowerCase().trim());
@@ -361,11 +383,42 @@ function doPost(e) {
       const headers = usersSheet.getDataRange().getValues()[0].map(h => String(h).toLowerCase().trim());
       let newRow = new Array(headers.length).fill("");
       headers.forEach((h, i) => {
-          if (h === "id") newRow[i] = payload.name;                
+          if (h === "id") newRow[i] = payload.id || payload.name;                
+          else if (h === "name") newRow[i] = payload.name;
+          else if (h === "role") newRow[i] = payload.role || "user";
+          else if (h === "pass") newRow[i] = payload.pass || "";
       });
       usersSheet.appendRow(newRow);
-      result = { status: "success", message: "USer account recorded successfully." };
+      result = { status: "success", message: "User account recorded successfully." };
     }
+
+    else if(action === "updateUser") {
+      const tx = payload.user || payload;
+      const data = usersSheet.getDataRange().getValues();
+      const txHeaders = data[0].map(h => String(h).toLowerCase().trim());
+      const idIdx = txHeaders.indexOf("id");
+   
+      
+      let foundRowIndex = -1;
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][idIdx]).trim() === String(payload.id).trim()) {
+          foundRowIndex = i + 1; // 1-based indexing for sheets range rows
+          break;
+        }
+      }
+
+      if (foundRowIndex !== -1) {
+          txHeaders.forEach((header, colIndex) => {
+            const cell = data.getRange(foundRowIndex, colIndex + 1);
+            if (header === "name") cell.setValue(tx.name);
+            else if (header === "role") cell.setValue(tx.role);
+            else if (header === "pass" && (tx.pass ||tx.removePass)) cell.setValue(tx.removePass ? "" : tx.pass);           
+          });
+          result = { status: "success", message: "User profile  has bin updated." };
+        } else {
+          throw new Error("Specified User profile ID could not be matched for deletion.");
+        } 
+    }  
 
   else if(action === "deleteUser") {
     const data = usersSheet.getDataRange().getValues();
@@ -373,7 +426,7 @@ function doPost(e) {
     
     let targetRowIndex = -1;
     for (let i = 1; i < data.length; i++) {
-      if (String(data[i][idIdx]).trim() === String(payload.name).trim()) {
+      if (String(data[i][idIdx]).trim() === String(payload.id).trim()) {
         targetRowIndex = i + 1; // 1-based indexing for sheets range rows
         break;
       }

@@ -38,6 +38,7 @@
           <div class="meta-item">
             <p class="meta-label">Version History:</p>
             <div class="meta-value"><ul>
+                <li><strong>0.92</strong> - User roles</li>
                 <li><strong>0.78</strong> - User management improvements</li>
                 <li><strong>0.73</strong> - Device authentication improvements</li>
                 <li><strong>0.70</strong> - styling, childmanagemt, refactoring </li>

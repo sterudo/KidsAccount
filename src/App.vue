@@ -14,17 +14,20 @@
 
         <div class="user-selector">
           <label for="global-user" id="global-user-label">User:</label>
-          <select id="global-user" v-model="currentUser" @change="saveUserPreference">
-            <option v-for="user in users" :key="user" :value="user">{{ user }}</option>
+          <select id="global-user" v-model="currentUserId" @change="onUserChange">
+            <option v-for="user in users" :key="user.id" :value="user.id">{{ user.name }}</option>
           </select>
         </div>
       </div>
 
       <div>
+     
+
         <ActionMenu 
         :debug-mode="isDebugEnabled"
         :show-help="isSpeechHelpVisible"
         :isOnline="isOnline"
+        :currentUser="currentUser"
         @navigate="(screen) => currentScreen = screen"
         @refresh="fetchSyncDatabase"
         @request-add-child="openProfileEditorForNewChild"
@@ -102,6 +105,18 @@
         🔄 Processing & Syncing Spreadsheet Cloud Database Engine...
         </div>
       
+        <div v-if="isPasswordModalOpen" class="modal-overlay">
+        <div class="card" style="background: #450b0b;">
+          <h3>Enter Password for <em style="color:cyan">{{ resolveUserName(pendingUserId) }}</em></h3>
+          <div style="display: flex; gap: 8px;"> 
+          <input type="password" v-model="passwordInput" placeholder="Password" autofocus />
+          <button @click="verifyPassword" class="btn btn-primary"  style="padding:4px;">Unlock</button>
+          <button @click="isPasswordModalOpen = false" class="btn btn-secondary"  style="padding:4px;">Cancel</button>
+          </div>
+          <p v-if="passwordError" class="error-message">{{ passwordError }}</p>
+        </div>
+      </div>
+
         <AddChildSettings 
           v-if="currentScreen === 'addChildSettings'"
           v-model="childForm"
@@ -110,7 +125,7 @@
       
         <AddUserSettings 
           v-if="currentScreen === 'addUserSettings'"
-          v-model="newUserFormName"
+          v-model="newUserFormObject"
           :users="users"
           :is-user-deletable="isUserDeletable"
           @submit="handleCreateUser"
@@ -173,7 +188,7 @@
                     <h3 :style="`color:${child.accentcolor};`">{{ child.name }} </h3>
                     <span class="allowance-label"><span class="allowance-label-text">Allowance:</span>
                       {{ formatCurrency(child.allowanceamount) }}/{{ child?.allowanceinterval === "weekly" ? "wk" : "mo" }}</span>
-                    <button 
+                    <button  v-if="currentUser.role == 'admin' || currentUser.role == 'super'"
                       type="button" 
                       @click.stop="openProfileEditor(child)" 
                       class="btn-settings-gear-accent">⚙️</button>
@@ -189,7 +204,7 @@
             <button 
               type="button" id="add-child-btn"
               @click="openProfileEditorForNewChild" 
-              class="btn btn-submit-tx addc">  ➕ Add New Child Account</button>
+              v-if="currentUser.role == 'admin' || currentUser.role == 'super'" class="btn btn-submit-tx addc">  ➕ Add New Child Account</button>
           </div>
 
           <div v-if="isOnline" class="voice-modal-card" @click.stop>
@@ -494,7 +509,7 @@
                 <div class="text-left where">Type</div>
                 <div class="text-right">Amount</div>
                 <template v-if="showMetaFields">
-                  <div class="text-left">Recorded By</div>
+                  <div class="text-left">By</div>
                   <div class="text-left">Fingerprint</div>
                   <div class="text-left">Timestamp</div>
                 </template>
@@ -517,36 +532,32 @@
                   class="desktop-grid-row"
                   :class="{ 
                     'editing-row': editingTxId === tx.id, 
-                    'clickable-last-row': isLastTransaction(tx.id) 
+                    'clickable-last-row': isLastTransaction(tx.id),
+                    'image-preview': (isOnline && tx.fileurl && tx.fileurl.startsWith('http'))
                   }"
-                  :style="showMetaFields ? 'grid-template-columns:100px 1fr 1fr 90px 110px 130px 120px 120px' : 'grid-template-columns: 100px 1fr 1fr 90px 110px'"
+                  :title="(isOnline && tx.fileurl && tx.fileurl.startsWith('http')) ? 'Click to view receipt image' : 
+                  (isLastTransaction(tx.id) ? 'Click to edit transaction': '')"
+                  :style="showMetaFields ? 'grid-template-columns:80px 1fr 1fr 90px 110px  80px 140px 90px' : 'grid-template-columns: 80px 1fr 1fr 90px 110px'"
                   @click="handleRowClick(tx)" >
                   <!-- Pinned Save Action Bar for desktop rows editing state controls -->
             
                   <!-- Row display logic / Form fields toggle during row selections -->
                   <template v-if="editingTxId !== tx.id">
-                    <div class="text-left">{{ formatDate(tx.date) }}</div>
-                    <div class="text-left"><b>🛒</b> {{ tx.what }}
-                      <button 
-                        v-if="isOnline && tx.fileurl && tx.fileurl.startsWith('http')" 
-                        type="button" 
-                        @click.stop="openImagePreviewModal(getRawImageUrl(tx.fileurl))" 
-                        class="btn-image-thumbnail-trigger"
-                        :title="`View Receipt inside App ${tx.fileurl}`"
-                      >
-                        📸
-                      </button>
-                      <p class="onlyMobile locationP"><b v-if="tx.where != '-' &&  tx.where != ''">🏪</b> {{ tx.where }}</p>
+                    <div class="text-left">{{ formatDate(tx.date, true) }}</div>
+                    <div class="text-left"><b v-if="!(isOnline && tx.fileurl && tx.fileurl.startsWith('http'))">🛒</b>
+                      <b class="camera" v-if="isOnline && tx.fileurl && tx.fileurl.startsWith('http')">📸</b>
+                       {{ tx.what }}                      
+                      <p class="onlyMobile locationP"><b v-if="tx.where.trim() != '-' &&  tx.where.trim() != ''">🏪</b> {{ (tx.where.trim() == "-") ? '' : tx.where  }}</p>
                     </div>
-                    <div class="text-left where">{{ tx.where || '-' }}</div>
+                    <div class="text-left where">{{ (tx.where.trim() == "-") ? '' : tx.where }}</div>
                     <div class="text-left where">{{ tx.type  }}</div>
                     <div style="font-size: 16px !important;" class="text-right" :class="(tx.type === 'deposit' || tx.type === 'receive')? 'pos-dark-text' : 'neg-text'">
                       {{ ((tx.type === 'deposit' || tx.type === 'receive') ? '+' : '-') }}{{ formatCurrency(tx.amount) }}
                     </div>
                     <template v-if="showMetaFields">
-                      <div class="meta-cell text-left ">{{ tx.recordedBy }}</div>
-                      <div class="meta-cell mono text-left">{{ tx.deviceFingerprint }}</div>
-                      <div class="meta-cell mono text-left">{{ formatTimestamp(tx.utcTimestamp) }}</div>
+                      <div class="meta-cell text-left ">{{ resolveUserName(tx.recordedby) }}</div>
+                      <div class="meta-cell text-left">{{ tx.device }}</div>
+                      <div class="meta-cell text-left">{{ formatTimestamp(tx.timestamp) }}</div>
                     </template>
                   </template>
 
@@ -574,7 +585,7 @@
               <!-- Pin Starting Balance cleanly to the absolute bottom of the list -->
               <div 
                 class="desktop-grid-row initial-balance-row"
-                :style="showMetaFields ? 'grid-template-columns:100px 1fr 1fr 90px 110px 130px 120px 120px' : 'grid-template-columns: 100px 1fr 1fr 90px 110px'" >
+                :style="showMetaFields ? 'grid-template-columns:80px 1fr 1fr 90px 110px  80px 140px 90px' : 'grid-template-columns: 80px 1fr 1fr 90px 110px'" >
                 <div>-</div>
                 <div><strong>Starting Balance</strong></div>
                 <div class="where">-</div>
@@ -598,6 +609,8 @@
     :image-url="activePreviewUrl"
     @close="closeImagePreviewModal"
   />
+
+
 
   <AboutDialog :is-open="isAboutOpen" :app-version="appVersion" @close="isAboutOpen = false" />
 
@@ -665,8 +678,9 @@ const selectedChildId = ref(null);
 const showMetaFields = ref(false);
 const activeHelper = ref(null);
 
-const users = ref(['Dad', 'Mum']);
-const currentUser = ref('Dad');
+const users = ref([ { id : "Dad", name: "Stephan", role: "super"}, {id: "Mum", name: "Matina", role: "admin"}]);
+const currentUserId = ref('Dad');
+const currentUser = ref({ id: "Dad", name: "Stephan", role: "super"});
 
 const children = ref([]);
 const transactions = ref([]);
@@ -674,7 +688,7 @@ const transactions = ref([]);
 const editingTxId = ref(null);
 const editForm = ref({ date: '', what: '', where: '', type: 'withdrawal', amount: 0 });
 
-const newUserFormName = ref('');
+const newUserFormObject = ref({ name: '', role: 'user', pass: '' });
 const txForm = ref({
   date: new Date().toISOString().split('T')[0],
   what: '',
@@ -710,12 +724,15 @@ const showExamples = ref((window.localStorage.getItem('showExamples') ?  ((windo
 const cloudGeminiApiKey = ref('');
 const dashError = ref('');
 let recognition = null;
-
+const pendingUserId = ref(null);
+const passwordInput = ref('');
+const isPasswordModalOpen = ref(false);
 
 const systemConfig = ref({});
 const isLoading = ref(false);
 const isAuthenticated = ref(false);
 const deviceFingerprint = ref("");
+const passwordError = ref("");
 
 // Setup LocalStorage key strings
 const STORAGE_KEY = "vault_cached_dataset";
@@ -783,10 +800,12 @@ onMounted(() => {
   
   // 2. Recall saved user preference from localstorage
   const savedUser = localStorage.getItem('pocket_money_active_user');
-  if (savedUser && users.value && users.value.includes(savedUser)) {
-    currentUser.value = savedUser;
+  if (savedUser && users.value && users.value.find(u => u.id === savedUser)) {
+    currentUser.value = users.value.find(u => u.id === savedUser);
+    currentUserId.value = savedUser;
   } else {
-    currentUser.value = 'Dad'; // Default fallback
+    currentUserId.value = 'Dad'; // Default fallback
+    currentUser.value = users.value.find(u => u.id === 'Dad');
   }
 
   // 3. Instantly pull and mount whatever dataset resides in local storage
@@ -812,7 +831,10 @@ onMounted(() => {
   window.addEventListener('popstate', handleHardwareBackButton);
 
   // 9. Initial live data fetch (fills background if authed, prompts foreground validation if cold) 
-  fetchSyncDatabase(isAuthenticated.value);
+  loadFromLocalStorage();
+  if (navigator.onLine) {
+    fetchSyncDatabase(isAuthenticated.value);
+  }
   
   window.triggerSystemConfirm = (msg, title) => {
     if (confirmDialog.value) {
@@ -876,6 +898,35 @@ onMounted(() => {
   });
 });
 
+function fixParsedUsers(parsedUsers) {
+  if (parsedUsers && Array.isArray(parsedUsers) && parsedUsers.length > 0) {
+    return parsedUsers.map(u => {
+      if (typeof u === "string") {
+        return { id: u, name: u, role: (u === "Dad") ? "super" : ((u === "Mum") ? "admin" : "user") };
+      }
+      return u;
+    });
+  }
+  return [ { id : "Dad", name: "Stephan", role: "super"}, {id: "Mum", name: "Matina", role: "admin"}]; // Default fallback
+}
+
+function loadFromLocalStorage() {
+  const cachedData = localStorage.getItem("vault_cached_dataset");
+
+  let parsedUsers = []
+  if(cachedData) {    
+      const parsed = JSON.parse(cachedData);  
+      parsedUsers = fixParsedUsers(parsed?.users);
+      
+      children.value = parsed?.children || [];        
+      transactions.value = parsed?.transactions || [];          
+      users.value = parsedUsers;     
+      avatars.value = parsed?.avatars  || [];          
+      systemConfig.value = parsed?.config || {};                       
+      cloudGeminiApiKey.value = systemConfig?.value?.geminiApiKey || "";         
+  }
+}
+
 function initializeAppCache() {
   console.log("initializeAppCache executing...");
 
@@ -886,7 +937,7 @@ function initializeAppCache() {
     // Initialize clean baseline types so templates don't crash rendering empty frames
     children.value = [];
     transactions.value = [];
-    users.value = ['Dad', 'Mum']; // Default fallback personas
+    users.value = [ { id : "Dad", name: "Stephan", role: "super"}, {id: "Mum", name: "Matina", role: "admin"}]; // Default fallback personas
     systemConfig.value = {};
     avatars.value = [];
     isAuthenticated.value = false;
@@ -894,17 +945,7 @@ function initializeAppCache() {
   }
 
   try {
-    const parsed = JSON.parse(cachedData);
-    
-    // Enforce data types explicitly to keep downstream filters stable
-    children.value = Array.isArray(parsed.children) ? parsed.children : [];
-    transactions.value = Array.isArray(parsed.transactions) ? parsed.transactions : [];
-    users.value = Array.isArray(parsed.users) ? parsed.users : ['Dad', 'Mum'];
-    systemConfig.value = parsed.config && typeof parsed.config === 'object' ? parsed.config : {};
-    avatars.value = Array.isArray(parsed.avatars) ? parsed.avatars : []; 
-    
-    // Synchronize API configuration parameters
-    cloudGeminiApiKey.value = systemConfig.value.geminiApiKey || systemConfig.value.gemini_api_key || '';
+    loadFromLocalStorage();
     
     // Mark application as initialized with local data
     isAuthenticated.value = true;
@@ -1028,10 +1069,7 @@ async function checkNetworkConnectivity() {
       isOnline.value = true;
       logToScreen("🌐 Internet access restored! Initiating outbox queue flush...");
       
-      // ✅ Aligned with your real outbox engine name
-      if (typeof processOfflineOutboxQueue === 'function') {
-        processOfflineOutboxQueue();
-      }
+      syncPendingTransactions();
     }
   } catch (err) {
     // Catches total network deadzones, failed fetches, or timeout abort errors
@@ -1082,8 +1120,12 @@ async function fetchSyncDatabase(isBackground = false) {
 
     // Update timestamp on network attempt resolution to avoid loop hammering on errors
     lastSyncTimestamp.value = Date.now();
-
+    
     if (!response.ok) {
+      if (response.status === 403) {
+        isDeviceUnauthorized.value = true;
+        return;
+      } 
       throw new Error(`Server returned HTTP bad response status code: ${response.status}`);
     }
 
@@ -1099,7 +1141,7 @@ async function fetchSyncDatabase(isBackground = false) {
     // 2. 🌟 Process and map server response payload down to reactive states safely
     children.value = Array.isArray(data.children) ? data.children : children.value;
     transactions.value = Array.isArray(data.transactions) ? data.transactions : transactions.value;
-    users.value = Array.isArray(data.users) ? data.users : users.value;
+    users.value = fixParsedUsers(Array.isArray(data.users) ? data.users : users.value);
     systemConfig.value = (data.config && typeof data.config === 'object') ? data.config : systemConfig.value;
     avatars.value = Array.isArray(data.avatars) ? data.avatars : avatars.value; 
     
@@ -1122,6 +1164,9 @@ async function fetchSyncDatabase(isBackground = false) {
     isAuthenticated.value = true;
     console.log("💾 Ledger synchronization finalized successfully. Local storage updated.");
   } catch (err) {
+    if (!navigator.onLine) {
+      loadFromLocalStorage(); // Fallback to cache
+    }
     console.error("❌ Network sync exception encountered:", err);
     // Enforce error cooling-off window backoff to protect browser execution threads
     lastSyncTimestamp.value = Date.now() - (SYNC_COOLDOWN_MS / 2); 
@@ -1148,7 +1193,7 @@ function purgeLocalStorageAuth() {
   if (typeof OUTBOX_STORAGE_KEY !== 'undefined') {
     localStorage.removeItem(OUTBOX_STORAGE_KEY);
   } else {
-    localStorage.removeItem("vault_pending_outbox");
+    localStorage.removeItem(OUTBOX_STORAGE_KEY);
   }
 
   localStorage.removeItem(AVATAR_CACHE_KEY);
@@ -1157,7 +1202,7 @@ function purgeLocalStorageAuth() {
   // 2. Clear out all active client operational memory states cleanly
   children.value = [];
   transactions.value = [];
-  users.value = ['Dad', 'Mum']; // Revert to safe, default fallback personas
+  users.value = [ { id : "Dad", name: "Stephan", role: "super"}, {id: "Mum", name: "Matina", role: "admin"}]; // Revert to safe, default fallback personas
   avatars.value = [];
   
   if (typeof pendingQueue !== 'undefined') {
@@ -1285,14 +1330,21 @@ function toggleExamples() {
 
 function openImagePreviewModal(url) {
   if (!url) return;
-  
+  activePreviewUrl.value = "data:image/png;base64, iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAABmJLR0QA/wD/AP+gvaeTAAAAC0lEQVQI12NgAAIAAAUAAeImBZsAAAAASUVORK5CYII="
   let streamableUrl = url;
   if (url.includes('drive.google.com/file/d/')) {
     const fileId = url.split('/file/d/')[1].split('/')[0];    
-    streamableUrl = `https://docs.google.com/uc?export=view&id=${fileId}`;
+    fetchAvatarProxy(fileId).then(proxyUrl => {
+      streamableUrl = proxyUrl;
+      activePreviewUrl.value =  streamableUrl;
+    }).catch(err => {
+      console.error("Avatar proxy fetch failed:", err);      
+    });
+
+    // streamableUrl = `https://docs.google.com/uc?export=view&id=${fileId}`;
   }
 
-  activePreviewUrl.value = streamableUrl;
+//  activePreviewUrl.value =  streamableUrl;
   isPreviewModalOpen.value = true;  
 }
 
@@ -1489,149 +1541,6 @@ async function parseImageWithGeminiVision(base64Data, mimeType) {
 
 //#endregion
 
-//#region --- 📍 GPS SMART LOCATOR ENGINE (WHERE SCANNER) ---
-function fetchSmartLocationList() {
-  if (!navigator.geolocation) {
-    triggerSystemAlert("Geolocation is completely unsupported by this hardware profile.", "⚠️ Hardware Limitation");
-    return;
-  }
-
-  isLocating.value = true;
-  nearbyShopSuggestions.value = [];
-  logToScreen("GPS Module: Requesting high accuracy location tracking coordinates...");
-
-  navigator.geolocation.getCurrentPosition(
-    async (position) => {
-      const lat = position.coords.latitude;
-      const lon = position.coords.longitude;
-      logToScreen(`Location locked! Latitude: ${lat.toFixed(5)}, Longitude: ${lon.toFixed(5)}`);
-
-      try {
-        logToScreen("Querying open-source Nominatim reverse geocoder map data...");
-        const osmUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`;
-        
-        const response = await fetch(osmUrl, {
-          headers: { 'User-Agent': 'KidsAccountsManagerPWA/1.18' }
-        });
-        
-        const data = await response.json();
-        
-        const addressBlock = data.address ? JSON.stringify(data.address) : "{}";
-        const explicitName = data.name || "";
-        const fallbackString = data.display_name || "";
-
-        // Pass lat and lon parameters down to context evaluator
-        await processLocationContextWithAI(addressBlock, explicitName, fallbackString, lat, lon);
-
-      } catch (osmErr) {
-        logToScreen(`❌ Reverse Geocoding Map request failed: ${osmErr.message}`);
-      } finally {
-        isLocating.value = false;
-      }
-    },
-    (geoError) => {
-      logToScreen(`❌ Core Geolocation Error caught (${geoError.code}): ${geoError.message}`);
-      triggerSystemAlert("Unable to fetch location details. Ensure PWA location access permissions are enabled on your phone.", "📍 Location Error");
-      isLocating.value = false;
-    },
-    { enableHighAccuracy: true, timeout: 7000 }
-  );
-}
-
-async function processLocationContextWithAI(addressJson, explicitName, completeString, lat, lon) {
-  if (!cloudGeminiApiKey.value) {
-    isLocating.value = false;
-    return;
-  }
-
-  // PROXIMITY SHORT-CIRCUIT: Fast-path for Home location to save API usage and run instantly
-  const HOME_LAT = 51.4101982;
-  const HOME_LON = -0.0322811;
-  const PROXIMITY_RADIUS_M = 50;
-
-  if (typeof lat === 'number' && typeof lon === 'number') {
-    // Calculate Haversine distance in meters
-    const R = 6371000;
-    const dLat = (lat - HOME_LAT) * Math.PI / 180;
-    const dLon = (lon - HOME_LON) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(HOME_LAT * Math.PI / 180) * Math.cos(lat * Math.PI / 180) *
-              Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distance = R * c;
-
-    if (distance <= PROXIMITY_RADIUS_M) {
-      logToScreen(`📍 Home proximity alert triggered! Distance: ${distance.toFixed(1)}m. Instantly mapping suggestions.`);
-      nearbyShopSuggestions.value = ["Home", "Amazon", "Online", "Corner Shop", "Sainsbury's", "App Store", "Google Play"];
-      isLocating.value = false;
-      return;
-    }
-  }
-
-  const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${cloudGeminiApiKey.value}`;
-
-  const promptText = `
-    You are a geographical sorting microservice for a ledger application.
-    Analyze this openstreetmap data configuration mapping context:
-    - Target Point Name: "${explicitName}"
-    - Address Payload Breakdown: ${addressJson}
-    - Formatted Location Line: "${completeString}"
-
-    Determine the top 3 most likely clean shop names, supermarket chains, parks, or activity venues located here where a child could spend money. 
-    Clean up specific store number branches (e.g. use "Sainsbury's" instead of "Sainsbury's Superstore #5543").
-    If the business target name "${explicitName}" is a valid commercial shop brand, ensure it occupies index [0] of your output array.
-    If it is a purely residential area, suggest options like "Home", "Corner Shop", or "Online".
-
-    Output a strict JSON string array format matching exactly this: 
-    ["Store Option A", "Store Option B", "Store Option C", "Store Option D", "Store Option E", "Store Option F", "Store Option G"].
-    No markdown wrappers (\`\`\`json), no trailing text, no extra characters.
-  `;
-
-  try {
-    const response = await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: promptText }] }]
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error responding with status code: ${response.status}`);
-    }
-
-    const resData = await response.json();
-    
-    // Guard deep dot-notation keys
-    const candidate = resData?.candidates?.[0];
-    if (candidate?.finishReason === "SAFETY" || candidate?.finishReason === "RECITATION") {
-      throw new Error(`Content generation blocked by safety parameters (Reason: ${candidate.finishReason})`);
-    }
-
-    let rawJsonText = candidate?.content?.parts?.[0]?.text;
-    if (!rawJsonText) {
-      throw new Error("No suggestion text returned from location processing engine.");
-    }
-
-    rawJsonText = rawJsonText.trim();
-    
-    // 🌟 NOTICE: Using '```' in the Javascript pattern below to prevent code-block conflicts
-    if (rawJsonText.startsWith("```")) {
-      rawJsonText = rawJsonText.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
-    }
-
-    const elements = JSON.parse(rawJsonText);
-    nearbyShopSuggestions.value = Array.isArray(elements) ? elements : [];
-    logToScreen(`GPS Parsing Complete! Extracted options: ${JSON.stringify(nearbyShopSuggestions.value)}`);
-
-  } catch (error) {
-    logToScreen(`❌ AI Location mapping failed: ${error.message}`);
-    nearbyShopSuggestions.value = [explicitName || "Corner Shop", "Online", "Amazon"];
-  } finally {
-    isLocating.value = false;
-  }
-}
-//#endregion
 
 //#region Helpers
 function logToScreen(msg, consolelog = true) {
@@ -1726,6 +1635,11 @@ function calculateBalance(childId) {
   // Return the rounded balance to prevent floating-point precision issues
   return Math.round((initialAmount + netLedger) * 100) / 100;
 }
+
+function resolveUserName(userId) {
+  const user = users.value.find(u => String(u.id).toLowerCase() === String(userId).toLowerCase());
+  return user ? user.name : userId;
+} 
 //#endregion
 
 //#region --- 🎙️ VOICE RECOGNITION ENGINE (WHAT YOU SAY IS WHAT YOU GET) ---
@@ -2086,9 +2000,9 @@ function navigateToLedger(childId) {
 }
 
 // Check if this device fingerprint is missing from the authorized list
-const isDeviceUnauthorized = computed(() => {
-  return !isAuthenticated.value;
-});
+// const isDeviceUnauthorized = computed(() => {  return !isAuthenticated.value;});
+
+const isDeviceUnauthorized = ref(false); // Only set to true if the server explicitly returns 403
 
 const selectedChild = computed(() => children.value.find(c => c.id === selectedChildId.value || String(c.id) === String(selectedChildId.value)));
 //#endregion
@@ -2137,6 +2051,70 @@ async function handleCreateChild() {
   }
 }
 
+async function syncPendingTransactions() {
+  // Check if we have anything to do
+  if (pendingQueue.value.length === 0) {
+    initializeOfflineQueue();
+  }
+
+  if (pendingQueue.value.length === 0) 
+  
+  if (!isOnline.value) {
+    logToScreen("⚠️ Sync attempted while offline. Waiting for connection...");
+    return;
+  }
+
+  logToScreen(`🔄 Synchronizing ${pendingQueue.value.length} pending transactions...`);
+
+  // Process queue one by one to maintain order and handle errors per item
+  while (pendingQueue.value.length > 0) {
+    const tx = pendingQueue.value[0]; // Peek at the first item
+
+    try {
+
+      const response = await fetch(SHEET_API_URL, {
+            method: "POST",
+            body: JSON.stringify({
+              action: "addTransaction",
+              fingerprint: generateDeviceFingerprint(),
+              id: tx.id,
+              childId: tx.childid,
+              date: tx.date,
+              what: tx.what,
+              where: tx.where,
+              type: tx.type,
+              amount: tx.amount,
+              recordedBy: tx.recordedby,
+              utcTimestamp: tx.timestamp,
+              receiptImageBase64: "",
+              receiptBase64: ""
+            })
+          });
+    
+        const result = await response.json();
+        if (result.status === "success") {
+          // Success: Remove from queue
+            pendingQueue.value.shift();
+            localStorage.setItem(OUTBOX_STORAGE_KEY, JSON.stringify(pendingQueue.value));
+            
+            // Update the main transaction list to mark it as synced
+            const idx = transactions.value.findIndex(t => t.id === tx.id);
+            if (idx !== -1) transactions.value[idx].isPendingSync = false;
+            
+            logToScreen(`✅ Synced: ${tx.what}`);
+          
+        } else {
+          throw new Error(data.message);
+        }   
+   
+    } catch (err) {
+      console.error("Sync failed for transaction:", tx.id, err);    
+      break; // Stop the loop so we don't spam the server
+    }
+  }
+  await fetchSyncDatabase(true);
+}
+
 async function handleCreateTransaction() {
   if (!txForm.value.amount || !selectedChildId.value) return;
   
@@ -2166,7 +2144,7 @@ async function handleCreateTransaction() {
       where: txForm.value.where.trim() || '-',
       type: 'send',
       amount: Number(txForm.value.amount),
-      recordedby: currentUser.value || 'System',
+      recordedby: currentUserId.value || 'System',
       timestamp: new Date().toISOString(),
       transfergroup: groupToken,
       receiptImageBase64: attachedReceiptImage,
@@ -2187,7 +2165,7 @@ async function handleCreateTransaction() {
 
     if (!isOnline.value) {
       pendingQueue.value.push(optimisticSenderRow, optimisticReceiverRow);
-      localStorage.setItem("vault_pending_outbox", JSON.stringify(pendingQueue.value));
+      localStorage.setItem(OUTBOX_STORAGE_KEY, JSON.stringify(pendingQueue.value));
       return;
     }
 
@@ -2236,7 +2214,7 @@ async function handleCreateTransaction() {
     where: txForm.value.where.trim() || '-',
     type: txForm.value.type,
     amount: Number(txForm.value.amount),
-    recordedby: currentUser.value || 'System',
+    recordedby: currentUserId.value || 'System',
     timestamp: new Date().toISOString(),
     transfergroup: '',
     receiptImageBase64: attachedReceiptImage,
@@ -2249,7 +2227,7 @@ async function handleCreateTransaction() {
 
   if (!isOnline.value) {
     pendingQueue.value.push(optimisticTxRow);
-    localStorage.setItem("vault_pending_outbox", JSON.stringify(pendingQueue.value));
+    localStorage.setItem(OUTBOX_STORAGE_KEY, JSON.stringify(pendingQueue.value));
     return;
   }
 
@@ -2347,10 +2325,10 @@ const dynamicSuggestionsWhere = computed(() => {
 //#endregion
 
 //#region User Management Logic
-function isUserDeletable(userName) {
-  const hasTransactions = transactions?.value?.some(t => t.recordedBy === userName) ?? false;
+function isUserDeletable(userId) {
+  const hasTransactions = transactions?.value?.some(t => t.recordedBy === userId) ?? false;
   const moreThanOneUser = (users?.value?.length ?? 0) > 1;
-  if(userName === "Dad" || userName === "Mum") return false;
+  if(userId === "Dad" || userId === "Mum") return false;
   return !hasTransactions && moreThanOneUser;
 }
 
@@ -2359,7 +2337,7 @@ function isUserDeletable(userName) {
  * Integrates non-blocking UI feedback and robust API error handling.
  */
 async function handleCreateUser() {
-  const name = newUserFormName.value.trim();
+  const name = newUserFormObject.value.name ? newUserFormObject.value.name.trim() : '';
   if (!name) return;
 
   let closeit = false;
@@ -2389,23 +2367,27 @@ async function handleCreateUser() {
     return;
   }
   isLoading.value = true;
-  
+  const payload = {
+        action: "createUser",
+        fingerprint: generateDeviceFingerprint(), 
+        name: name,
+        role: newUserFormObject.value.role ? newUserFormObject.value.role : 'user',
+        id: `user-${Date.now()}`,
+        pass: newUserFormObject.value.pass ? newUserFormObject.value.pass : "" 
+
+      }
   try {
     const response = await fetch(SHEET_API_URL, {
       method: "POST",
-      body: JSON.stringify({
-        action: "createUser",
-        fingerprint: generateDeviceFingerprint(), 
-        name: name
-      })
+      body: JSON.stringify(payload)
     });
     
     const result = await response.json();
 
     if (result.status === "success") {
-      users.value.push(name);
-      newUserFormName.value = "";
-      logToScreen(`✅ User "${name}" created successfully.`);
+      users.value.push({ id: payload.id, name: payload.name, role: payload.role });
+      newUserFormObject.value = { name: '', role: 'user', pass: '' };
+      logToScreen(`✅ User "${payload.name}" created successfully.`);
       await fetchSyncDatabase(true); // Silent update of user list
     } else {
       throw new Error(result.message || "Server rejected user creation.");
@@ -2423,10 +2405,17 @@ async function handleCreateUser() {
  * Refactored User Revocation Routine
  * Uses the non-blocking SystemConfirm component and maintains UI sync.
  */
-async function handleDeleteUser(userName) {
+async function handleDeleteUser(userId) {
+  const user = users.value.find(u => u.id === userId);
+  if (!user) return;
+
+  if(user.id === "Dad" || user.id === "Mum") {  
+    return;
+  }
+
   // 1. Confirm action via custom non-blocking dialog
   const confirmed = await triggerSystemConfirm(
-    `Are you sure you want to revoke system privileges for ${userName}? This action cannot be undone.`, 
+    `Are you sure you want to revoke system privileges for ${user.name}? This action cannot be undone.`, 
     "⚠️ Revoke User Access"
   );
 
@@ -2440,7 +2429,7 @@ async function handleDeleteUser(userName) {
       method: "POST",
       body: JSON.stringify({
         action: "deleteUser",
-        name: userName,
+        id: user.id,
         fingerprint: generateDeviceFingerprint() // Consistency with existing security patterns
       })
     });
@@ -2448,8 +2437,8 @@ async function handleDeleteUser(userName) {
     const result = await response.json();
 
     if (result.status === "success") {
-      users.value.splice(users.value.findIndex(u => u.name === userName), 1);
-      logToScreen(`🗑️ Access revoked for user: ${userName}.`);
+      users.value.splice(users.value.findIndex(u => u.id === user.id), 1);
+      logToScreen(`🗑️ Access revoked for user: ${user.name}.`);
       // 3. Refresh database state
       await fetchSyncDatabase(true); 
     } else {
@@ -2463,9 +2452,60 @@ async function handleDeleteUser(userName) {
   }
 }
 
-function saveUserPreference() {
-  localStorage.setItem('pocket_money_active_user', currentUser.value);
+async function onUserChange(event) {
+  const targetId = event.target.value;
+  const targetUser = users.value.find(u => u.id === targetId);
+  passwordInput.value = "";
+  pendingUserId.value = "";
+  // Check if role requires password
+  if (targetUser && (targetUser.role === 'admin' || targetUser.role === 'super')) {
+    pendingUserId.value = targetId;
+    passwordError.value = '';
+    isPasswordModalOpen.value = true; // Open your custom password dialog
+    // Reset select box to current user so it doesn't "jump" prematurely
+    currentUserId.value = currentUser.value.id; 
+  } else {
+    // Standard user, no password needed
+    isPasswordModalOpen.value = false;
+    commitUserChange(targetId);
+  }
 }
+
+async function verifyPassword() {
+
+  isLoading.value = true;
+  try {
+    const response = await fetch(SHEET_API_URL, {
+      method: "POST",
+      body: JSON.stringify({ 
+        action: "verifyPassword", 
+        fingerprint: generateDeviceFingerprint(),
+        userId: pendingUserId.value, 
+        password: passwordInput.value 
+      })
+    });
+    
+    const result = await response.json();
+    isLoading.value = false;
+    if (result.status === "success") {
+      commitUserChange(pendingUserId.value);  
+    } else {
+      passwordError.value = 'Incorrect password.';  
+    }
+  } catch(e) {
+    isLoading.value = false;
+  }
+}
+
+function commitUserChange(id) {
+  passwordInput.value = "";
+  pendingUserId.value = "";
+  isPasswordModalOpen.value = false;
+  currentUserId.value = id;
+  currentUser.value = users.value.find(u => u.id === id) || { id: 'Dad', name: 'Stephan', role: 'super' };
+  localStorage.setItem('pocket_money_active_user', id);
+}
+
 //#endregion
 
 //#region --- TRANSACTION EDITING & ADJUSTMENT CONTROLLERS ---
@@ -2491,11 +2531,10 @@ function handleRowClick(tx) {
       childid: String(tx.childid ?? tx.childId ?? '').trim()
     };
   } else {
-    // Replaced blocking alert with a non-intrusive notification or UI state
-    triggerSystemAlert(
-      "Audit Control Lock: adjustments are limited exclusively to the absolute newest ledger event.", 
-      "🔒 Audit Lock"
-    );
+    if(isOnline.value && tx.fileurl && tx.fileurl.startsWith('http')) {
+        openImagePreviewModal(getRawImageUrl(tx.fileurl))
+    }
+
   }
 }
 
@@ -2518,7 +2557,7 @@ async function saveInlineEdit(txId) {
     where: editForm.value.where ? editForm.value.where.trim() : '-',
     type: String(editForm.value.type).toLowerCase().trim(),
     amount: Number(editForm.value.amount),
-    recordedBy: currentUser.value
+    recordedBy: currentUserId.value
   };
   
   isLoading.value = true;
@@ -2613,6 +2652,10 @@ function cancelInlineEdit() {
  * direct mutation of the source state before saving.
  */
 function openProfileEditor(child) {
+  if(currentUser.value.role == 'user') {   
+    return;
+  }
+
   // 1. Clone the object to decouple form inputs from global state
   selectedEditChild.value = { ...child };
   
@@ -3254,6 +3297,182 @@ async function fetchAvatarProxy(fileId) {
 
 //#region Geo-Location Proximity Caching for AI Suggestions
 
+function fetchSmartLocationList() {
+  if (!navigator.geolocation) {
+    triggerSystemAlert("Geolocation is completely unsupported by this hardware profile.", "⚠️ Hardware Limitation");
+    return;
+  }
+
+  isLocating.value = true;
+  nearbyShopSuggestions.value = [];
+  logToScreen("GPS Module: Requesting high accuracy location tracking coordinates...");
+
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
+      const lat = position.coords.latitude;
+      const lon = position.coords.longitude;
+      logToScreen(`Location locked! Latitude: ${lat.toFixed(5)}, Longitude: ${lon.toFixed(5)}`);
+      let suggestions = await getAISuggestionsWithGeoCache(lat, lon);
+
+      if(suggestions != null) {
+        nearbyShopSuggestions.value = suggestions;
+        isLocating.value = false;
+        return;
+      }
+
+      try {        
+        logToScreen("Querying open-source Nominatim reverse geocoder map data...", true);
+        const osmUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`;
+        
+        const response = await fetch(osmUrl, {
+          headers: { 'User-Agent': 'KidsAccountsManagerPWA/1.18' }
+        });
+        
+        const data = await response.json();
+        
+        const addressBlock = data.address ? JSON.stringify(data.address) : "{}";
+        const explicitName = data.name || "";
+        const fallbackString = data.display_name || "";
+
+        // Pass lat and lon parameters down to context evaluator
+        await processLocationContextWithAI(addressBlock, explicitName, fallbackString, lat, lon);
+
+      } catch (osmErr) {
+        logToScreen(`❌ Reverse Geocoding Map request failed: ${osmErr.message}`);
+      } finally {
+        isLocating.value = false;
+      }
+    },
+    (geoError) => {
+      logToScreen(`❌ Core Geolocation Error caught (${geoError.code}): ${geoError.message}`);
+      triggerSystemAlert("Unable to fetch location details. Ensure PWA location access permissions are enabled on your phone.", "📍 Location Error");
+      isLocating.value = false;
+    },
+    { enableHighAccuracy: true, timeout: 7000 }
+  );
+}
+
+async function processLocationContextWithAI(addressJson, explicitName, completeString, lat, lon, onlyUpdateCache = false) {  
+  if (!cloudGeminiApiKey.value) {
+    isLocating.value = false;
+    return;
+  }
+
+  // PROXIMITY SHORT-CIRCUIT: Fast-path for Home location to save API usage and run instantly
+  const HOME_LAT = 51.4101982;
+  const HOME_LON = -0.0322811;
+  const PROXIMITY_RADIUS_M = 50;
+
+  if (typeof lat === 'number' && typeof lon === 'number') {
+    // Calculate Haversine distance in meters
+    const R = 6371000;
+    const dLat = (lat - HOME_LAT) * Math.PI / 180;
+    const dLon = (lon - HOME_LON) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(HOME_LAT * Math.PI / 180) * Math.cos(lat * Math.PI / 180) *
+              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distance = R * c;
+
+    if (distance <= PROXIMITY_RADIUS_M) {
+      logToScreen(`📍 Home proximity alert triggered! Distance: ${distance.toFixed(1)}m. Instantly mapping suggestions.`);
+      if(onlyUpdateCache) {
+        geoProximityCache.value.push({
+          lat: lat,
+          lng: lon,
+          suggestions: ["Home", "Amazon", "Online", "Corner Shop", "Sainsbury's", "App Store", "Google Play"],
+          timestamp: Date.now()
+        });
+        localStorage.setItem("vault_geo_location_cache", JSON.stringify(geoProximityCache.value));
+        return;
+      } else {
+        nearbyShopSuggestions.value = ["Home", "Amazon", "Online", "Corner Shop", "Sainsbury's", "App Store", "Google Play"];
+      }
+      isLocating.value = false;
+      return;
+    }
+  }
+
+  const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${cloudGeminiApiKey.value}`;
+
+  const promptText = `
+    You are a geographical sorting microservice for a ledger application.
+    Analyze this openstreetmap data configuration mapping context:
+    - Target Point Name: "${explicitName}"
+    - Address Payload Breakdown: ${addressJson}
+    - Formatted Location Line: "${completeString}"
+
+    Determine the top 3 most likely clean shop names, supermarket chains, parks, or activity venues located here where a child could spend money. 
+    Clean up specific store number branches (e.g. use "Sainsbury's" instead of "Sainsbury's Superstore #5543").
+    If the business target name "${explicitName}" is a valid commercial shop brand, ensure it occupies index [0] of your output array.
+    If it is a purely residential area, suggest options like "Home", "Corner Shop", or "Online".
+
+    Output a strict JSON string array format matching exactly this: 
+    ["Store Option A", "Store Option B", "Store Option C", "Store Option D", "Store Option E", "Store Option F", "Store Option G"].
+    No markdown wrappers (\`\`\`json), no trailing text, no extra characters.
+  `;
+
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: promptText }] }]
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error responding with status code: ${response.status}`);
+    }
+
+    const resData = await response.json();
+    
+    // Guard deep dot-notation keys
+    const candidate = resData?.candidates?.[0];
+    if (candidate?.finishReason === "SAFETY" || candidate?.finishReason === "RECITATION") {
+      throw new Error(`Content generation blocked by safety parameters (Reason: ${candidate.finishReason})`);
+    }
+
+    let rawJsonText = candidate?.content?.parts?.[0]?.text;
+    if (!rawJsonText) {
+      throw new Error("No suggestion text returned from location processing engine.");
+    }
+
+    rawJsonText = rawJsonText.trim();
+    
+    // 🌟 NOTICE: Using '```' in the Javascript pattern below to prevent code-block conflicts
+    if (rawJsonText.startsWith("```")) {
+      rawJsonText = rawJsonText.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
+    }
+
+    const elements = JSON.parse(rawJsonText);
+    let suggestions =  Array.isArray(elements) ? elements : [];
+    nearbyShopSuggestions.value = suggestions
+    logToScreen(`GPS Parsing Complete! Extracted options: ${JSON.stringify(nearbyShopSuggestions.value)}`);
+
+     // Push fresh entry down into local memory cache tracks
+      geoProximityCache.value.push({
+        lat: lat,
+        lng: lon,
+        suggestions: suggestions,
+        timestamp: Date.now()
+      });
+      
+      // Keep cache lean by keeping only the 20 most recent locations
+      if (geoProximityCache.value.length > 20) geoProximityCache.value.shift();
+      
+      localStorage.setItem("vault_geo_location_cache", JSON.stringify(geoProximityCache.value));
+      return data.suggestions;
+  } catch (error) {
+    logToScreen(`❌ AI Location mapping failed: ${error.message}`);
+     if(!onlyUpdateCache) {
+      nearbyShopSuggestions.value = [explicitName || "Corner Shop", "Online", "Amazon"];
+     }
+  } finally {
+    isLocating.value = false;
+  }
+}
+
 // Storage dictionary structure: { "lat_lng_key": { suggestions: [...], lat: X, lng: Y, timestamp: Date } }
 const geoProximityCache = ref(JSON.parse(localStorage.getItem("vault_geo_location_cache") || "[]"));
 
@@ -3262,8 +3481,8 @@ const geoProximityCache = ref(JSON.parse(localStorage.getItem("vault_geo_locatio
  * Serves cached results instantly while triggering a silent background refresh.
  */
 async function getAISuggestionsWithGeoCache(currentLatitude, currentLongitude) {
-  const coordinateThreshold = 0.0005; // ~55m radius
-
+  const coordinateThreshold = 0.0002; // ~25m radius
+ 
   // Find entry within threshold
   const matchedCacheEntry = geoProximityCache.value.find(entry => 
     Math.abs(entry.lat - currentLatitude) <= coordinateThreshold && 
@@ -3272,13 +3491,15 @@ async function getAISuggestionsWithGeoCache(currentLatitude, currentLongitude) {
 
   if (matchedCacheEntry) {
     console.log("🎯 Proximity cache match found! Returning instantly.");
-    silentRefreshGeoCache(currentLatitude, currentLongitude);
+    processLocationContextWithAI("{}", "", "", currentLatitude, currentLongitude, true);
     return matchedCacheEntry.suggestions;
-  }
+  } else {
 
-  return await fetchLiveLocationSuggestions(currentLatitude, currentLongitude);
+      return null; 
+  }
 }
 
+/*
 async function fetchLiveLocationSuggestions(lat, lng) {
   try {
     const response = await fetch(`${SHEET_API_URL}?action=getAISuggestions&lat=${lat}&lng=${lng}`);
@@ -3302,18 +3523,20 @@ async function fetchLiveLocationSuggestions(lat, lng) {
   } catch (err) {
     console.error("Live geocoding lookup failed:", err);
   }
+ 
   return [];
 }
+  */
 
 /**
  * Performs a silent background refresh of the geo-location cache.
- */
+
 async function silentRefreshGeoCache(lat, lng) {
   if (!isOnline.value) return;
   // Fire request quietly to keep suggestions up to date over time
   await fetchLiveLocationSuggestions(lat, lng);
   console.log("🔄 Background geo-cache synchronization finalized successfully.");
-}
+} */
 
 //#endregion
 

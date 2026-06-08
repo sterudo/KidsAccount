@@ -37,12 +37,13 @@ export function formatTimestamp(tsStr) {
   }
 }
 
-export function formatDate(dStr) {
+export function formatDate(dStr, short = false) {
   if (!dStr) return '-';
   // If Google passes an ISO timestamp string, slice just the YYYY-MM-DD portion for clean parsing
   const cleanDateStr = dStr.includes('T') ? dStr.split('T')[0] : dStr;
   const [year, month, day] = cleanDateStr.split('-');
-  return `${day}/${month}/${year}`;
+  const monthname = new Date(cleanDateStr).toLocaleString('en-GB', { month: 'short' });
+  return short ? `${day} ${monthname} ${year.slice(-2)}` : `${day}/${month}/${year}`;
 }
 
 export function formatDateMobile(dStr) {

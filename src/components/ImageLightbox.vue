@@ -7,8 +7,9 @@
       </div>
       
       <div class="image-preview-body">
-        <img :src="imageUrl" alt="Receipt Document" class="full-preview-img" />
+        <img :src="imageUrl" alt="loading Receipt Document" class="full-preview-img" @load="imgLoad" />
       </div>
+      <p v-if="isImgLoading">Loading ....</p>
       
       <div class="image-preview-footer">
         <a :href="imageUrl" target="_blank" class="btn-open-tab-fallback">Open External ↗</a>
@@ -18,6 +19,8 @@
 </template>
 
 <script setup>
+import { ref } from 'vue';
+const isImgLoading = ref(true)
 // Define incoming data requirements from parent orchestration view
 defineProps({
   isOpen: {
@@ -32,6 +35,14 @@ defineProps({
 
 // Define outward events to bubble communication back up to parent state handlers
 const emit = defineEmits(['close']);
+
+function imgLoad(event) {
+  if(event.target.src.length > 200) {
+      isImgLoading.value = false;
+  } else {
+      isImgLoading.value = true;
+  }
+}
 
 function closeModal() {
   emit('close');

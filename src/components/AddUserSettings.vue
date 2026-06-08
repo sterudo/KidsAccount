@@ -5,13 +5,35 @@
       <form @submit.prevent="$emit('submit')">
         <div class="form-vertical-group">
           <label for="new-user-name">Parent Name</label>
-          <input maxlength="16"
+          <input 
             id="new-user-name" 
-            :value="modelValue" 
-            @input="$emit('update:modelValue', $event.target.value)" 
+            :value="modelValue.name" 
+            @input="$emit('update:modelValue', { ...modelValue, name: $event.target.value })" 
             type="text" 
-            placeholder="e.g. Mum, maxlength: 16 characters, only letters A-Z and a-z" 
+            placeholder="Display Name" 
             required 
+          />
+        </div>
+
+        <div class="form-vertical-group">
+          <label for="new-user-name">Role</label>
+         <select
+          id="new-user-role" 
+          :value="modelValue.role" 
+          @change="$emit('update:modelValue', { ...modelValue, role: $event.target.value })" 
+          required 
+        >
+          <option value="user">User</option>
+          <option value="admin">Admin</option>
+        </select>
+        </div>
+        <div class="form-vertical-group">
+          <label for="new-user-pass">Password</label>
+          <input maxlength="16"
+            id="new-user-password" 
+            :value="modelValue.pass" 
+            @input="$emit('update:modelValue', { ...modelValue, pass: $event.target.value })"     
+            type="password"       
           />
         </div>
         <button type="submit" class="btn btn-success block-btn">Register User</button>
@@ -23,11 +45,12 @@
           No registered users found.
         </p>
         <ul v-else class="deletable-list">
-          <li v-for="user in users" :key="user">
-            <span>{{ user }}</span>
+          <li v-for="user in users" :key="user.id">
+            <span>{{ user.name }}</span>
+            <span> ({{ user.role }})</span>
             <button 
-              v-if="isUserDeletable(user)" 
-              @click="$emit('delete-user', user)" 
+              v-if="isUserDeletable(user.id)" 
+              @click="$emit('delete-user', user.id)" 
               class="btn-delete-small" 
               title="Delete User"
             >
@@ -44,7 +67,7 @@
 // Explicitly map incoming system values and arrays
 defineProps({
   modelValue: {
-    type: String,
+    type: Object,
     required: true
   },
   users: {
