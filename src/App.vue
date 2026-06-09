@@ -321,9 +321,9 @@
                 <input id="tx-date" v-model="txForm.date" type="date" required style="width: 120px"/>
               </div>
 
-              <div class="form-group">
+              <div class="form-group" style="    position: absolute;    left: 166px; max-width:150px;   top: 0px;">
                 <label for="tx-type">Type</label>
-               <select v-model="txForm.type" class="form-input" style="width:min-content;">
+               <select v-model="txForm.type" id="tx-type" class="form-input" style="width:min-content;">
                 <option value="withdrawal">Withdrawal (-)</option>
                 <option value="deposit">Deposit (+)</option>
                 <option value="transfer">Send to child (>)</option>
@@ -331,8 +331,8 @@
               </div>
 
               <div v-if="txForm.type === 'transfer'" class="form-group dynamic-recipient-wrapper" style="grid-column: 1 / 3">
-                <label>Recipient Child</label>
-                <select v-model="txForm.recipientChildId" class="form-input">
+                <label for="tx-recipient">Recipient Child</label>
+                <select v-model="txForm.recipientChildId" id="tx-recipient" class="form-input">
                   <option value="" disabled>-- Select Recipient --</option>
                   <option  v-for="child in children.filter(c => String(c.id) !== String(selectedChildId))" 
                     :key="child.id" 
@@ -348,6 +348,7 @@
                   <input 
                     v-model="txForm.what" 
                     type="text" 
+                    id="tx-what"
                     placeholder="e.g. Ice cream" 
                     required 
                     @focus="activeHelper = 'what'"

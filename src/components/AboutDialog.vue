@@ -115,7 +115,7 @@ defineEmits(['close']);
   border: 1px solid #334155;
   border-radius: 16px;
   width: 100%;
-  max-width: 420px;
+  max-width: 800px;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
   overflow: hidden;
   animation: modalSlideUp 0.2s ease-out;
