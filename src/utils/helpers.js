@@ -208,3 +208,13 @@ export function generateUniqueList(transactions, field) {
 }
 
 export function getTodayString() { return new Date().toISOString().split('T')[0]; }
+
+export function checkEnterKey(event, id){
+  if(event.key === 'Enter'){
+    event.preventDefault();
+    const targetElement = document.getElementById(id);
+    if(targetElement) {
+      targetElement.click();
+    }
+  }
+}

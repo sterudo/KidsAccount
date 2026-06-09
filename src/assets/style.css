@@ -163,13 +163,13 @@ select#global-user {
     left: 0;
     width: 100vw;
     height: 100vh;
-    background: var(--inputBG); /*  rgba(15, 23, 42, 0.75) Dims the dark mode app smoothly */
-    backdrop-filter: blur(4px); /* Softly blurs background elements */
+    background: #00000054;
+    backdrop-filter: blur(4px);
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 9999; /* Ensures it sits safely on top of fixed title blocks */
-    pointer-events: all; /* Captures and blocks all accidental glass taps */
+    z-index: 9999;
+    pointer-events: all;
 }
 
 /* Centralized Status Dialog Box */
@@ -1932,6 +1932,13 @@ select:active,select:focus, select:focus-visible,select:focus-within {
 .desktop-grid-body {
   max-height: calc(100vh - 164px);
   overflow-y: auto;
+}
+
+.smallform {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    align-items: center;
 }
 
 /* Ensure mobile stacking rules do not distort header utilities button configurations */

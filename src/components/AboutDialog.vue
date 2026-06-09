@@ -24,7 +24,12 @@
           </div>
           <div class="meta-item">
             <p class="meta-label">GIThub page:</p>
-            <p class="meta-value"><a href="https://github.com/sterudo/KidsAccount" target="_blank">github.com/sterudo/KidsAccount</a></p>
+            <p class="meta-value"><a href="https://github.com/sterudo/KidsAccount" target="_blank">github.com/sterudo/KidsAccount</a>              
+              <br>
+              <a href="https://github.com/sterudo/KidsAccount/blob/main/README.md" target="_blank">readme.md</a>
+              <br>
+              <a href="https://github.com/sterudo/KidsAccount/marketing" target="_blank">Marketing Website</a>
+            </p>
           </div>
           <div class="meta-item">
             <p class="meta-label">Tech stack:</p>
@@ -38,6 +43,7 @@
           <div class="meta-item">
             <p class="meta-label">Version History:</p>
             <div class="meta-value"><ul>
+                <li><strong>0.97</strong> - Device management, WhoPaid, readme, webpage improvements</li>
                 <li><strong>0.92</strong> - User roles</li>
                 <li><strong>0.78</strong> - User management improvements</li>
                 <li><strong>0.73</strong> - Device authentication improvements</li>

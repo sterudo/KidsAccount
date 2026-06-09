@@ -6,11 +6,13 @@
  */
 
 function doGet(e) {
+
   SpreadsheetApp.flush(); 
   
   const fingerprint = e && e.parameter ? String(e.parameter.fingerprint).trim() : "";
   const action = e && e.parameter ? e.parameter.action : "";
-  const isPublicAction = (action === "getAvatarProxy" || action === "getDatabase" || action === "getInitialData" || action === "getPendingAuth" );
+  const password = e && e.parameter ? e.parameter.password : "";
+  const isPublicAction = (action === "getAvatarProxy" || action === "getDatabase" || action === "getInitialData" || action === "getPendingAuth" || action === "getAuthorizedDevices");
     
    if (!isPublicAction || !isAuthenticatedDevice(fingerprint)) {
     return ContentService.createTextOutput(JSON.stringify({ 
@@ -71,15 +73,51 @@ function doGet(e) {
   }
 
    if (action === "getPendingAuth") {
+      if(!canPass("Dad", password, userSheet)) {
+         return ContentService.createTextOutput(JSON.stringify({ 
+          status: 403, 
+          error: "Unauthorized", 
+          message: "Invalid password." +p
+        })).setMimeType(ContentService.MimeType.JSON);
+    }
     const authSheet = sheet.getSheetByName("authorized_devices");
     const data = authSheet.getDataRange().getValues();
     const pending = [];
 
     // Skip header row (i=1), look at Column B (index 1)
     for (let i = 1; i < data.length; i++) {
-      const fingerprint = String(data[i][1]).trim();
+      const fingerprint = String(data[i][1]).trim();   
       if (fingerprint.length > 0) {
-        pending.push({ fingerprint: fingerprint, timestamp: data[i][2] });
+       const who = String(data[i][3]).trim();
+        pending.push({ fingerprint: fingerprint, timestamp: data[i][2], who:who });
+      }
+    }
+
+    return ContentService.createTextOutput(JSON.stringify(pending))
+                         .setMimeType(ContentService.MimeType.JSON);
+  }
+  
+    
+    else if (action === "getAuthorizedDevices") {
+    
+     if(!canPass("Dad", password, userSheet)) {
+         return ContentService.createTextOutput(JSON.stringify({ 
+          status: 403, 
+          error: "Unauthorized", 
+          message: "Invalid password." +p
+        })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    const authSheet = sheet.getSheetByName("authorized_devices");
+    const data = authSheet.getDataRange().getValues();
+    const pending = [];
+
+    // Skip header row (i=1), look at Column B (index 1)
+    for (let i = 1; i < data.length; i++) {
+      const fingerprint = String(data[i][0]).trim();
+      const who = String(data[i][3]).trim(); 
+      if (fingerprint.length > 0) {
+        pending.push({ fingerprint: fingerprint, who: who });
       }
     }
 
@@ -118,6 +156,7 @@ function doGet(e) {
     message: "Engine active, but action not recognized: " + action 
   })).setMimeType(ContentService.MimeType.JSON);
 }
+   
 
 function doPost(e) {
   SpreadsheetApp.flush();
@@ -197,21 +236,8 @@ function doPost(e) {
     else if(action === "verifyPassword") {
       let userId = payload.userId;
       let password = payload.password;
-      const data = usersSheet.getDataRange().getValues();
-      const txHeaders = data[0].map(h => String(h).toLowerCase().trim());
-      const idIdx = txHeaders.indexOf("id");
-      const passIdx =  txHeaders.indexOf("pass");
-   
-      
-      let foundRowIndex = -1;
-      for (let i = 1; i < data.length; i++) {
-        if (String(data[i][idIdx]).trim() === String(userId).trim()        
-        && String(data[i][passIdx]).trim() === String(password).trim()) {
-          foundRowIndex = i + 1; // 1-based indexing for sheets range rows
-          break;
-        }
-      }
-      if(foundRowIndex > -1) {
+
+      if(canPass(userId, password, usersSheet)) {
          result = { status: "success"};
       } else {
           result = { status: "error" };
@@ -525,30 +551,57 @@ function doPost(e) {
       }
       if(!found) {
         // Appends to Column B (Column 2)
-        authSheet.appendRow(["", payload.requestFingerprint, new Date().toISOString()]);
+        authSheet.appendRow(["", payload.requestFingerprint, new Date().toISOString(), payload.who]);
       }
       result = { status: "success" };
     }
 
     else if (action === "approveAuth") {
+
       const authSheet = sheet.getSheetByName("authorized_devices");
       const data = authSheet.getDataRange().getValues();
       let success = false;
       
-      // Find the fingerprint in Column B and move it to Column A
-      for (let i = 1; i < data.length; i++) {
-        if (data[i][1] === payload.approveFingerprint) {
-          authSheet.getRange(i + 1, 1).setValue(payload.approveFingerprint); // Move to Column A
-          authSheet.getRange(i + 1, 2).clearContent();               // Clear Column B
-          result = { status: "success" };
-          success = true;
+      if(canPass("Dad", payload.password, usersSheet)) {
+        // Find the fingerprint in Column B and move it to Column A
+        for (let i = 1; i < data.length; i++) {
+          if (data[i][1] === payload.approveFingerprint) {
+            authSheet.getRange(i + 1, 1).setValue(payload.approveFingerprint); // Move to Column A
+            authSheet.getRange(i + 1, 2).clearContent();               // Clear Column B
+            result = { status: "success" };
+            success = true;
+          }
         }
       }
       if(!success) {
          result = { status: "error", message: "Request not found" };
       }
     }
-    
+
+    else if (action === "removeAuth") {
+      const authSheet = sheet.getSheetByName("authorized_devices");
+      const data = authSheet.getDataRange().getValues();
+      let success = false;
+      let foundRowIndex = .1
+      if(canPass("Dad", payload.password, usersSheet)) {
+        // Find the fingerprint in Column B and move it to Column A
+        for (let i = 1; i < data.length; i++) {
+          if (data[i][0] === payload.removeFingerprint) {
+            foundRowIndex = i + 1;
+            break;          
+          }
+        }
+        if(foundRowIndex !== -1) {
+          authSheet.deleteRow(foundRowIndex);
+            result = { status: "success" };
+            success = true;
+        }
+      }
+      if(!success) {
+         result = { status: "error", message: "Request not found" };
+      }
+    }
+
   } catch (err) {
     result = { status: "error", message: err.toString() };
   }
@@ -765,4 +818,24 @@ function uploadChildAvatar(childId, base64Data) {
   }
   
   return { success: true, fileId: driveFileId };
+}
+
+function canPass(userId, password, usersSheet) {
+      
+  const data = usersSheet.getDataRange().getValues();
+  const txHeaders = data[0].map(h => String(h).toLowerCase().trim());
+  const idIdx = txHeaders.indexOf("id");
+  const passIdx =  txHeaders.indexOf("pass");
+
+
+  let foundRowIndex = -1;
+  for (let i = 1; i < data.length; i++) {
+  if (String(data[i][idIdx]).trim() === String(userId).trim()        
+    && String(data[i][passIdx]).trim() === String(password).trim()) {
+      foundRowIndex = i + 1; // 1-based indexing for sheets range rows
+      break;
+  }
+  }
+  return (foundRowIndex > -1);
+      
 }

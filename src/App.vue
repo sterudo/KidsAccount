@@ -14,7 +14,7 @@
 
         <div class="user-selector">
           <label for="global-user" id="global-user-label">User:</label>
-          <select id="global-user" v-model="currentUserId" @change="onUserChange">
+          <select id="global-user" v-model="currentUserId" @change="onUserChange" style="    color: #96d9f5 !important;">
             <option v-for="user in users" :key="user.id" :value="user.id">{{ user.name }}</option>
           </select>
         </div>
@@ -52,6 +52,7 @@
         <code>{{ deviceFingerprint }}</code>
       </div></p>
       <div>
+        <input type="text" required v-model="whichDevice" placeholder="who or what device is this" style="max-width:200px" /><br>
         <button @click="requestAuth" class="btn btn-primary request-auth-btn" v-if="!requestSent">
             Request Authorisation
         </button>
@@ -109,8 +110,8 @@
         <div class="card" style="background: #450b0b;">
           <h3>Enter Password for <em style="color:cyan">{{ resolveUserName(pendingUserId) }}</em></h3>
           <div style="display: flex; gap: 8px;"> 
-          <input type="password" v-model="passwordInput" placeholder="Password" autofocus style="max-width:120px" />
-          <button @click="verifyPassword" class="btn btn-primary"  style="padding:4px;">Unlock</button>
+          <input type="password" v-model="passwordInput" placeholder="Password" autofocus style="max-width:120px" @keypress="(event) =>checkEnterKey(event,'unlockbtn')" />
+          <button @click="verifyPassword" class="btn btn-primary" id="unlockbtn"  style="padding:4px;">Unlock</button>
           <button @click="isPasswordModalOpen = false" class="btn btn-secondary"  style="padding:4px;">Cancel</button>
           </div>
           <p v-if="passwordError" class="error-message">{{ passwordError }}</p>
@@ -148,7 +149,7 @@
           v-if="currentScreen === 'deviceAuth'"
           :api-url="SHEET_API_URL"
           :fingerprint="deviceFingerprint"
-          :is-online="isOnline"
+          :is-loading="isLoading"
           @trigger-refresh="fetchSyncDatabase(true)"
         />
 
@@ -302,11 +303,20 @@
        
           <!-- Transaction Input Form -->
           <div class="card form-card">
-            <h3 style="margin-top: 10px;">Log New Transaction</h3>
+            <h3 style="margin-top: 10px;">New Transaction</h3>
             <div v-if="showTranscript" class="voice-transcript-log">
               <strong>🎤</strong> "{{ voiceTranscript }}"
             </div>
-            <form @submit.prevent="handleCreateTransaction" class="inline-form">
+            <form @submit.prevent="handleCreateTransaction" class="inline-form" style="margin-top: 16px;">
+              <div class="form-group" style="    position: absolute;    top: -3px;    width: 150px;    left: 175px;">
+                <label for="tx-whopaid">Who paid actually</label>
+                <select id="tx-whopaid" v-model="txForm.whopaid" required>                 
+                  <option v-for="user in users" :key="user.id" :value="user.id">
+                    {{ user.name }} 
+                  </option>
+                </select>
+              </div>
+
               <div class="form-group">
                 <label for="tx-date">Date</label>
                 <input id="tx-date" v-model="txForm.date" type="date" required style="width: 120px"/>
@@ -660,7 +670,8 @@ import {
   getRawImageUrl,
   applyTransactionFilters,
   generateUniqueList,
-  getTodayString
+  getTodayString,
+  checkEnterKey
 } from './utils/helpers';
 import { triggerSystemAlert, closeDialog } from './utils/dialogState.js';
 import ActionMenu from '@/components/ActionMenu.vue';
@@ -693,6 +704,7 @@ const editForm = ref({ date: '', what: '', where: '', type: 'withdrawal', amount
 
 const newUserFormObject = ref({ name: '', role: 'user', pass: '', mode: 'create', removePass: false  });
 const txForm = ref({
+  whopaid: currentUserId.value,
   date: new Date().toISOString().split('T')[0],
   what: '',
   where: '',
@@ -726,6 +738,7 @@ const systemLogs  = ref([]);
 const showExamples = ref((window.localStorage.getItem('showExamples') ?  ((window.localStorage.getItem('showExamples') === 'show') ? true : false) : true) );
 const cloudGeminiApiKey = ref('');
 const dashError = ref('');
+const whichDevice = ref('');
 let recognition = null;
 const pendingUserId = ref(null);
 const passwordInput = ref('');
@@ -956,6 +969,7 @@ function initializeAppCache() {
   }
 
   try {
+    isDeviceUnauthorized.value = false; // Reset unauthorized flag before attempting to load cache
     loadFromLocalStorage();
     
     // Mark application as initialized with local data
@@ -1135,6 +1149,8 @@ async function fetchSyncDatabase(isBackground = false) {
     if (!response.ok) {
       if (response.status === 403) {
         isDeviceUnauthorized.value = true;
+        purgeLocalStorageAuth();
+
         return;
       } 
       throw new Error(`Server returned HTTP bad response status code: ${response.status}`);
@@ -1145,6 +1161,7 @@ async function fetchSyncDatabase(isBackground = false) {
     console.log("data:", data);
     // Handle structural authorization purges immediately
     if (data.status === 403 || data.error === "Unauthorized") {  
+        isDeviceUnauthorized.value = true;
        purgeLocalStorageAuth();      
       return;
     }
@@ -1283,6 +1300,7 @@ async function refreshAuthStatus() {
   await fetchSyncDatabase(false);
   
   isChecking.value = false;
+  location.reload();
 }
 
 /**
@@ -1299,6 +1317,7 @@ async function requestAuth() {
       body: JSON.stringify({
         action: "requestAuth",
         fingerprint: "request",
+        who: whichDevice.value || "Unknown Device",
         timestamp: new Date().toISOString(),
         requestFingerprint:  deviceFingerprint.value
       })
@@ -1992,7 +2011,8 @@ function navigateToLedger(childId) {
   // 4. Initialize clean transaction form state
   // Using today's date and clearing descriptive fields to avoid stale data
   txForm.value = { 
-    date: getTodayString(), 
+    whopaid: currentUserId.value || 'Dad',
+    date: new Date().toISOString().split('T')[0], 
     what: '', 
     where: '', 
     type: 'withdrawal', 
@@ -2013,7 +2033,7 @@ function navigateToLedger(childId) {
 // Check if this device fingerprint is missing from the authorized list
 // const isDeviceUnauthorized = computed(() => {  return !isAuthenticated.value;});
 
-const isDeviceUnauthorized = ref(false); // Only set to true if the server explicitly returns 403
+const isDeviceUnauthorized = ref(true); // Only set to true if the server explicitly returns 403
 
 const selectedChild = computed(() => children.value.find(c => c.id === selectedChildId.value || String(c.id) === String(selectedChildId.value)));
 //#endregion
@@ -2154,6 +2174,7 @@ async function handleCreateTransaction() {
       what: `${txForm.value.what.trim() || 'Pocket Money Share'} to ${receiverChild?.name || 'Sibling'}`,
       where: txForm.value.where.trim() || '-',
       type: 'send',
+      whopaid: "child",
       amount: Number(txForm.value.amount),
       recordedby: currentUserId.value || 'System',
       timestamp: new Date().toISOString(),
@@ -2171,7 +2192,7 @@ async function handleCreateTransaction() {
     };
 
     transactions.value.unshift(optimisticSenderRow, optimisticReceiverRow);
-    txForm.value = { date: txDate, what: '', where: '', type: 'withdrawal', amount: null, recipientChildId: '', receiptImageBase64: '' };
+    txForm.value = { whopaid: currentUserId.value || 'unknown', date: txDate, what: '', where: '', type: 'withdrawal', amount: null, recipientChildId: '', receiptImageBase64: '' };
     saveDataCacheToDisk();
 
     if (!isOnline.value) {
@@ -2192,6 +2213,7 @@ async function handleCreateTransaction() {
           amount: optimisticSenderRow.amount,
           where: optimisticSenderRow.where,
           recordedBy: optimisticSenderRow.recordedby,
+          whopaid: txForm.value.whopaid || (currentUserId.value || 'Dad'),
           senderId: optimisticSenderRow.id,
           senderChildId: optimisticSenderRow.childid,
           senderWhat: optimisticSenderRow.what,
@@ -2233,7 +2255,7 @@ async function handleCreateTransaction() {
   };
 
   transactions.value.unshift(optimisticTxRow);
-  txForm.value = { date: txDate, what: '', where: '', type: 'withdrawal', amount: null, recipientChildId: '', receiptImageBase64: '' };
+  txForm.value = { whopaid: currentUserId.value || 'Dad',date: txDate, what: '', where: '', type: 'withdrawal', amount: null, recipientChildId: '', receiptImageBase64: '' };
   saveDataCacheToDisk();
 
   if (!isOnline.value) {
@@ -2253,6 +2275,7 @@ async function handleCreateTransaction() {
         date: optimisticTxRow.date,
         what: optimisticTxRow.what,
         where: optimisticTxRow.where,
+        whopaid: currentUserId.value || 'Dad',
         type: optimisticTxRow.type,
         amount: optimisticTxRow.amount,
         recordedBy: optimisticTxRow.recordedby,
@@ -2681,6 +2704,8 @@ function cancelInlineEdit() {
   // Optionally reset the form fields to ensure no stale data persists 
   // if the user immediately opens another edit or a new transaction form.
   txForm.value = {
+    whopaid : currentUserId.value || 'unknown',
+    date: new Date().toISOString().split('T')[0],
     type: 'withdrawal',
     amount: 0,
     what: '',

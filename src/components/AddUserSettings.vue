@@ -4,19 +4,18 @@
       <h2>{{ modelValue.mode === 'edit' ? `Edit ${modelValue?.name}` : 'Add Authorized Parent/User' }}</h2>
       <form @submit.prevent="$emit('submit')">
         <div class="form-vertical-group">
-          <label for="new-user-name">Parent Name</label>
+          <label for="new-user-name">User/Parent Name</label>
           <input 
             id="new-user-name" 
             :value="modelValue.name" 
             @input="$emit('update:modelValue', { ...modelValue, name: $event.target.value })" 
             type="text" 
-            placeholder="Display Name" 
             required 
           />
         </div>
 
         <div class="form-vertical-group">
-          <label for="new-user-name">Role</label>
+          <label for="new-user-role">Role</label>
          <select
           id="new-user-role" 
           :value="modelValue.role" 
@@ -69,7 +68,7 @@
             <span>{{ user.name }}</span>
             <span> ({{ user.role }})</span>
             <button  v-if="(currentUser.id === 'Dad' && user.id == 'Dad') || (user.id !== 'Dad')"          
-              @click="$emit('edit-user', user.id)" 
+              @click="editUser(user.id)" 
               class="btn-edit-small" 
               title="Edit User"
             >
@@ -88,7 +87,7 @@
           </li>
         </ul>
         <button              
-              @click="$emit('new-user')" 
+              @click="newNewUser" 
               class="btn-new-small" 
               title="Add User"
             >
@@ -100,6 +99,42 @@
 </template>
 
 <script setup>
+
+import { onMounted, nextTick } from 'vue';
+import { triggerSystemAlert } from '../utils/dialogState.js';
+
+onMounted(() => {
+  // Auto-focus password input when component mounts
+  setTimeout(() => {
+    const input = document.getElementById("new-user-name");
+    if (input) input.focus();
+  }, 300);
+});
+
+function editUser(userId) {
+  emit('edit-user', userId);
+  
+  // 3. Use nextTick instead of a guessed setTimeout
+  nextTick(() => {
+    const input = document.getElementById("new-user-name");
+    if (input) {
+      input.focus();
+    }
+  });
+}
+
+function newNewUser() {
+  emit('new-user');
+  
+  // 3. Use nextTick instead of a guessed setTimeout
+  nextTick(() => {
+    const input = document.getElementById("new-user-name");
+    if (input) {
+      input.focus();
+    }
+  });
+}
+
 // Explicitly map incoming system values and arrays
 defineProps({
   modelValue: {
@@ -122,7 +157,7 @@ defineProps({
 });
 
 // Broadcast form events back up to App.vue orchestration layer
-defineEmits(['submit', 'update:modelValue', 'delete-user','edit-user', 'new-user']);
+const emit = defineEmits(['submit', 'update:modelValue', 'delete-user','edit-user', 'new-user']);
 </script>
 <style>
  .adduserform label {
