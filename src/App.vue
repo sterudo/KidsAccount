@@ -306,8 +306,8 @@
             <div v-if="showTranscript" class="voice-transcript-log">
               <strong>🎤</strong> "{{ voiceTranscript }}"
             </div>
-            <form @submit.prevent="handleCreateTransaction" class="inline-form" style="margin-top: 16px;">
-              <div class="form-group" style="    position: absolute;    top: -3px;    width: 150px;    left: 175px;">
+            <form @submit.prevent="handleCreateTransaction" class="inline-form" style="margin-top: 16px;position:relative">
+              <div class="form-group" style="    position: absolute;   top: -62px;  width: 150px;  left: 166px;">
                 <label for="tx-whopaid">Who paid actually</label>
                 <select id="tx-whopaid" v-model="txForm.whopaid" required>                 
                   <option v-for="user in users" :key="user.id" :value="user.id">
