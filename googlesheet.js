@@ -227,6 +227,7 @@ function doPost(e) {
         else if (header === "timestamp") newRow[index] = payload.utcTimestamp || new Date().toISOString();
         else if (header === "fileurl") newRow[index] = fileUrl;
         else if (header === "transfergroup") newRow[index] = payload.transferGroup || "";
+        else if (header === "whopaid") newRow[index] = payload.whopaid || "";
       });
 
       txSheet.appendRow(newRow);
@@ -264,6 +265,7 @@ function doPost(e) {
         else if (header === "device") senderRow[index] = fingerprint;
         else if (header === "timestamp") senderRow[index] = timestamp;
         else if (header === "transfergroup") senderRow[index] = transferGroupToken;
+        else if (header === "whopaid") newRow[index] = payload.whopaid || "";
       });
 
       // Row B: The Recipient Mutation Row
@@ -280,6 +282,7 @@ function doPost(e) {
         else if (header === "device") receiverRow[index] = fingerprint;
         else if (header === "timestamp") receiverRow[index] = timestamp;
         else if (header === "transfergroup") receiverRow[index] = transferGroupToken;
+        else if (header === "whopaid") newRow[index] = payload.whopaid || "";
       });
 
       txSheet.appendRow(senderRow);

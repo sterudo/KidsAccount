@@ -49,8 +49,8 @@
     <div v-if="isDeviceUnauthorized" class="card auth-warning-card">
       <h4>🔒 You need to authorize this device</h4>
       <div>
-        <label for="which-device">Identify this device (<span>{{ deviceFingerprint }}</span>):</label><br>
-        <input type="text" required v-model="whichDevice" placeholder="eg: iphone Mike" id="whichDevice"
+        <label v-if="!requestSent" for="whichDevice">Identify this device (<span>{{ deviceFingerprint }}</span>):</label><br>
+        <input v-if="!requestSent" type="text" required v-model="whichDevice" placeholder="eg: iphone Mike" id="whichDevice"
           @keypress="(event) =>checkEnterKey(event,'requestAuthBtn')"  /><br><br>
         <button @click="requestAuth" id="requestAuthBtn" class="btn btn-primary request-auth-btn" v-if="!requestSent">
             Request Authorisation

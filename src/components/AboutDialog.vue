@@ -43,6 +43,7 @@
           <div class="meta-item">
             <p class="meta-label">Version History:</p>
             <div class="meta-value"><ul>
+                <li><strong>0.106</strong> - fingerprint and cleanup</li>
                 <li><strong>0.97</strong> - Device management, WhoPaid, readme, webpage improvements</li>
                 <li><strong>0.92</strong> - User roles</li>
                 <li><strong>0.78</strong> - User management improvements</li>
