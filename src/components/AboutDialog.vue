@@ -60,6 +60,9 @@
                 <li><strong>v0 - v0.30</strong> - PWA, Web, Offline mode and connectivity checker, AI features (Dictation, Camera, Location), Authentication, Responsiveness, mobile first</li>
             </ul></div>
           </div>        
+          <div>
+            <code>{{ fingerprint }}</code>
+          </div>
         </div>
       </div>
 
@@ -77,6 +80,10 @@ defineProps({
     required: true
   },
   appVersion: {
+    type: String,
+    required: true
+  },
+  fingerprint: {
     type: String,
     required: true
   }

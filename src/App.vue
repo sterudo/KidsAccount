@@ -8,9 +8,9 @@
 
   <h1 class="app-title"  :class="{ 'offline': !isOnline }"> 
     <button v-if="currentScreen !== 'dashboard'" @click="backToDashboard"  class="btn btn-back-nav">⬅ Back</button> 
-    <span class="h1s">Kids Accounts  <span class="versionno">v{{ appVersion }}</span></span>      
+    <span class="h1s" @click="purgeDebug">Kids Accounts  <span class="versionno">v{{ appVersion }}</span></span>      
 
-      <div class="user-selector-and-refresh-group"> 
+      <div class="user-selector-and-refresh-group"  v-if="!isDeviceUnauthorized"> 
 
         <div class="user-selector">
           <label for="global-user" id="global-user-label">User:</label>
@@ -20,7 +20,7 @@
         </div>
       </div>
 
-      <div>
+      <div  v-if="!isDeviceUnauthorized">
      
 
         <ActionMenu 
@@ -40,24 +40,23 @@
           @click="isAboutOpen = true" 
           class="btn-about-trigger" 
           :class="{ 'device-is-offline': !isOnline }"
-          :title="isOnline ? 'Online - Application Info' : 'Offline Mode Active'"
+          :title="isOnline ? 'Online - Application Info' : 'Offline Mode Active'"         
         >{{ isOnline ? '🤑' : '😢' }}</button>  
       </div>
   </h1>
 
   <div id="app">
     <div v-if="isDeviceUnauthorized" class="card auth-warning-card">
-      <h4>🔒 Authorizing this device ... please wait</h4>
-      <p>This is your devive fingerprint: <div class="fingerprint-badge" style="display:inline-block">
-        <code>{{ deviceFingerprint }}</code>
-      </div></p>
+      <h4>🔒 You need to authorize this device</h4>
       <div>
-        <input type="text" required v-model="whichDevice" placeholder="who or what device is this" style="max-width:200px" /><br>
-        <button @click="requestAuth" class="btn btn-primary request-auth-btn" v-if="!requestSent">
+        <label for="which-device">Identify this device (<span>{{ deviceFingerprint }}</span>):</label><br>
+        <input type="text" required v-model="whichDevice" placeholder="eg: iphone Mike" id="whichDevice"
+          @keypress="(event) =>checkEnterKey(event,'requestAuthBtn')"  /><br><br>
+        <button @click="requestAuth" id="requestAuthBtn" class="btn btn-primary request-auth-btn" v-if="!requestSent">
             Request Authorisation
         </button>
         <p v-if="requestSent">Request sent! An administrator must now approve this device in the Device Manager.</p>
-
+          <br><br>
         <button @click="refreshAuthStatus" class="btn btn-primary refresh-auth-btn" :disabled="isChecking">
         {{ isChecking ? 'Verifying...' : 'Refresh' }}
         </button>
@@ -625,7 +624,7 @@
 
 
 
-  <AboutDialog :is-open="isAboutOpen" :app-version="appVersion" @close="isAboutOpen = false" />
+  <AboutDialog :is-open="isAboutOpen" :app-version="appVersion"  :fingerprint="deviceFingerprint" @close="isAboutOpen = false" />
 
   <ChildProfileModal
     :is-open="isChildEditorOpen"
@@ -671,7 +670,8 @@ import {
   applyTransactionFilters,
   generateUniqueList,
   getTodayString,
-  checkEnterKey
+  checkEnterKey,
+  delayedFocus
 } from './utils/helpers';
 import { triggerSystemAlert, closeDialog } from './utils/dialogState.js';
 import ActionMenu from '@/components/ActionMenu.vue';
@@ -806,13 +806,8 @@ const isChecking = ref(false);
 
 onMounted(() => {
   // 1. Device fingerprint verification logic
-  let fp = localStorage.getItem('pocket_money_fingerprint');
-  if (!fp) {
-    fp = `fp-${Math.random().toString(36).substring(2, 7)}`;
-    localStorage.setItem('pocket_money_fingerprint', fp);
-  }
-  deviceFingerprint.value = fp;
-  console.log("Your Device Authorization Fingerprint is:", fp);
+  deviceFingerprint.value = generateDeviceFingerprint();
+  console.log("Your Device Authorization Fingerprint is:", deviceFingerprint.value);
   
   // 2. Recall saved user preference from localstorage
   const savedUser = localStorage.getItem('pocket_money_active_user');
@@ -1310,6 +1305,11 @@ async function refreshAuthStatus() {
 async function requestAuth() {
 
   try {
+     if( whichDevice.value.trim() == "") {
+      triggerSystemAlert("Please enter a name for this device before submitting the request.", "Device Name Required");
+      delayedFocus("whichDevice");
+      return;
+     }
     logToScreen("Sending authorization request to administrator...");
      requestSent.value = true;
     let response = await fetch(SHEET_API_URL, {
@@ -3614,6 +3614,16 @@ async function silentRefreshGeoCache(lat, lng) {
 
 //#endregion
 
+async function purgeDebug() {
+  if(currentUser.value.role != 'super') return;
+    const confirmed = await triggerSystemConfirm(
+    `Do you really want to purge the local data?`, 
+    "Security Checkpoint"
+  );
+
+  if (!confirmed) return;
+  purgeLocalStorageAuth();
+}
 
 </script>
 
