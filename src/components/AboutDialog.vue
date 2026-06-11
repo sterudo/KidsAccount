@@ -28,7 +28,7 @@
               <br>
               <a href="https://github.com/sterudo/KidsAccount/blob/main/README.md" target="_blank">readme.md</a>
               <br>
-              <a href="https://github.com/sterudo/KidsAccount/marketing" target="_blank">Marketing Website</a>
+              <a href="https://sterudo.github.io/KidsAccount/marketing/index.html" target="_blank">Marketing Website</a>
             </p>
           </div>
           <div class="meta-item">

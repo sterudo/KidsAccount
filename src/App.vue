@@ -110,7 +110,7 @@
           <h3>Enter Password for <em style="color:cyan">{{ resolveUserName(pendingUserId) }}</em></h3>
           <div style="display: flex; gap: 8px;"> 
           <input type="password" v-model="passwordInput" placeholder="Password" autofocus style="max-width:120px" @keypress="(event) =>checkEnterKey(event,'unlockbtn')" />
-          <button @click="verifyPassword" class="btn btn-primary" id="unlockbtn"  style="padding:4px;">Unlock</button>
+          <button @click="verifyPassword" class="btn btn-primary" id="unlockbtn"  style="padding:4px;">Login</button>
           <button @click="isPasswordModalOpen = false" class="btn btn-secondary"  style="padding:4px;">Cancel</button>
           </div>
           <p v-if="passwordError" class="error-message">{{ passwordError }}</p>
@@ -171,7 +171,7 @@
                   At a minimum, ensure to include the <b>action</b> (Add/Remove), <b>amount</b>, and <b>child's name</b>.<br> 
                   Nothing is submitted automatically; you will have the opportunity to review and confirm each transaction before it is recorded.
                   </li>
-                <li><strong>⚙️ User Controls:</strong> Make sure that you have selected the correct user (Mom/Dad) before performing any actions.</li>
+                <li><strong>⚙️ User Controls:</strong> Make sure that you have selected the correct user before performing any actions.</li>
               </ul>
             </div>
           </div>
@@ -303,9 +303,7 @@
           <!-- Transaction Input Form -->
           <div class="card form-card">
             <h3 style="margin-top: 10px;">New Transaction</h3>
-            <div v-if="showTranscript" class="voice-transcript-log">
-              <strong>🎤</strong> "{{ voiceTranscript }}"
-            </div>
+
             <form @submit.prevent="handleCreateTransaction" class="inline-form" style="margin-top: 16px;position:relative">
               <div class="form-group" style="    position: absolute;   top: -62px;  width: 150px;  left: 166px;">
                 <label for="tx-whopaid">Who paid actually</label>
@@ -473,6 +471,10 @@
                   {{ txForm.type === 'transfer' ? 'Send' : (txForm.type === 'deposit' ? 'Deposit'  : 'Withdraw') }}
                 </button>
               </form>
+
+            <div v-if="showTranscript" class="voice-transcript-log">
+              <strong>🎤</strong> "{{ voiceTranscript }}"
+            </div>
           </div>
 
           <!-- Filter & History Container -->
@@ -693,9 +695,11 @@ const selectedChildId = ref(null);
 const showMetaFields = ref(false);
 const activeHelper = ref(null);
 
-const users = ref([ { id : "Dad", name: "Stephan", role: "super"}, {id: "Mum", name: "Matina", role: "admin"}]);
-const currentUserId = ref('Dad');
-const currentUser = ref({ id: "Dad", name: "Stephan", role: "super"});
+const DEFAULT_USERS =  [ { id : "Dad", name: "Stephan", role: "super"}, {id: "Mum", name: "Matina", role: "admin"}, {id: "Guest", name: "Guest", role: "user"} ];
+
+const users = ref([...DEFAULT_USERS]);
+const currentUserId = ref('Guest');
+const currentUser = ref({id: "Guest", name: "Guest", role: "user"} );
 
 const children = ref([]);
 const transactions = ref([]);
@@ -816,8 +820,8 @@ onMounted(() => {
     currentUser.value = users.value.find(u => u.id === savedUser);
     currentUserId.value = savedUser;
   } else {
-    currentUserId.value = 'Dad'; // Default fallback
-    currentUser.value = users.value.find(u => u.id === 'Dad');
+    currentUserId.value = 'Guest'; // Default fallback
+    currentUser.value = users.value.find(u => u.id === 'Guest');
   }
 
   // 3. Instantly pull and mount whatever dataset resides in local storage
@@ -921,13 +925,30 @@ function navigateToScreen(screen) {
 function fixParsedUsers(parsedUsers) {
   if (parsedUsers && Array.isArray(parsedUsers) && parsedUsers.length > 0) {
     return parsedUsers.map(u => {
+      let role = "user"; // Default role
+      let id =  (typeof u === "string") ? u : (u.id || "Guest"); // Extract ID from object or use string value, default to "Guest" 
+      switch (id) {
+        case "Dad":
+          role = "super";
+          break;
+        case "Mum":
+          role = "admin";
+          break;
+        case "Guest":
+          role = "user";
+          break;
+        default:
+            role = u.role || "user"; // Preserve existing role if available, otherwise default to "user"
+      }
+        
+      
       if (typeof u === "string") {
-        return { id: u, name: u, role: (u === "Dad") ? "super" : ((u === "Mum") ? "admin" : "user") };
+        return { id: u, name: u, role: role };
       }
       return u;
     });
   }
-  return [ { id : "Dad", name: "Stephan", role: "super"}, {id: "Mum", name: "Matina", role: "admin"}]; // Default fallback
+  return [...DEFAULT_USERS]; // Default fallback
 }
 
 function loadFromLocalStorage() {
@@ -957,7 +978,7 @@ function initializeAppCache() {
     // Initialize clean baseline types so templates don't crash rendering empty frames
     children.value = [];
     transactions.value = [];
-    users.value = [ { id : "Dad", name: "Stephan", role: "super"}, {id: "Mum", name: "Matina", role: "admin"}]; // Default fallback personas
+    users.value = [...DEFAULT_USERS]; // Default fallback personas
     systemConfig.value = {};
     avatars.value = [];
     isAuthenticated.value = false;
@@ -1226,7 +1247,7 @@ function purgeLocalStorageAuth() {
   // 2. Clear out all active client operational memory states cleanly
   children.value = [];
   transactions.value = [];
-  users.value = [ { id : "Dad", name: "Stephan", role: "super"}, {id: "Mum", name: "Matina", role: "admin"}]; // Revert to safe, default fallback personas
+  users.value = [...DEFAULT_USERS]; // Revert to safe, default fallback personas
   avatars.value = [];
   
   if (typeof pendingQueue !== 'undefined') {
@@ -1988,6 +2009,7 @@ function backToDashboard() {
   selectedChildId.value = null;
   txForm.value.receiptImageBase64 = '';
   currentScreen.value = 'dashboard';
+  voiceTranscript.value = "";
   
   if (window.history.state?.screen && window.history.state.screen !== 'dashboard') {
     window.history.replaceState({ screen: 'dashboard' }, '');
@@ -2363,7 +2385,7 @@ const dynamicSuggestionsWhere = computed(() => {
 function isUserDeletable(userId) {
   const hasTransactions = transactions?.value?.some(t => t.recordedBy === userId) ?? false;
   const moreThanOneUser = (users?.value?.length ?? 0) > 1;
-  if(userId === "Dad" || userId === "Mum") return false;
+  if(userId === "Dad" || userId === "Mum" || userId === "Guest") return false;
   return !hasTransactions && moreThanOneUser;
 }
 
@@ -2411,6 +2433,10 @@ async function handleCreateUser() {
   if(userid === "Mum") {
     role = 'admin';
     newUserFormObject.value.removePass = false;
+  }
+  if(userid === "Guest") {
+    role = 'user';
+    newUserFormObject.value.removePass = true;
   }
   const payload = {
         action: "createUser",
@@ -2479,7 +2505,7 @@ async function handleDeleteUser(userId) {
   const user = users.value.find(u => u.id === userId);
   if (!user) return;
 
-  if(user.id === "Dad" || user.id === "Mum") {  
+  if(user.id === "Dad" || user.id === "Mum" || user.id === "Guest") {  
     return;
   }
 
@@ -2572,7 +2598,7 @@ function commitUserChange(id) {
   pendingUserId.value = "";
   isPasswordModalOpen.value = false;
   currentUserId.value = id;
-  currentUser.value = users.value.find(u => u.id === id) || { id: 'Dad', name: 'Stephan', role: 'super' };
+  currentUser.value = users.value.find(u => u.id === id) || { id: 'Guest', name: 'Guest', role: 'user' };
   if(currentUser.value.role === 'user') {
     navigateToScreen('dashboard'); 
   }

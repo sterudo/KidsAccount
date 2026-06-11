@@ -360,12 +360,14 @@ select#global-user {
     font-size: 0.95rem;
     margin: 2px;
     white-space: nowrap;
-    min-width: 80px;
+    min-width: 80px;      
+    text-shadow: 1px 1px black;
 }
 
 .btn-primary {
     background: var(--primary);
     color: var(--highContrastText);
+    text-shadow: 1px 1px black;
 }
 
 .refresh-auth-btn {
